@@ -45,36 +45,18 @@ Expand_Screenshot = [
 
 # Apps
 Expand_Apps = [
-  { Text = "", Action = "Command_Btop", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "", Action = "Command_Btop",    ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-
+  { Text = "", Action = "Command_Btop", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "󰕾", Action = "Command_Wiremix", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "󰕾", Action = "Command_Wiremix", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-
   { Text = "󰍉", Action = "Command_Walker", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "󰍉", Action = "Command_Walker",  ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-
-  { Text = "��", Action = "Command_Browser", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "", Action = "Command_Bluetooth", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "󰖟", Action = "Command_Browser", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-
-  { Text = "", Action = "Command_Editor", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "", Action = "Command_Editor",  ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-
-  { Text = "", Action = "Command_WiFi", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "", Action = "Command_WiFi",    ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-
+  { Text = "", Action = "Command_Editor", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "", Action = "Command_WiFi", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "󰒲", Action = "Command_Screensaver", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "󰒲", Action = "Command_Screensaver", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-
-  { Text = "", Action = "Command_Share", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "", Action = "Command_Share",   ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-
+  { Text = "", Action = "Command_Share", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "󰕾", Action = "Command_AudioSwitch", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "󰕾", Action = "Command_AudioSwitch", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-
-  { Text = "", Action = "Command_WindowCloseAll", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "", Action = "Command_WindowCloseAll", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "󰁔", Action = "Command_WindowPop",      ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "󰁔", Action = "Command_WindowPop", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "󰏬", Action = "Command_WorkspaceToggleGaps", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
 ]
 

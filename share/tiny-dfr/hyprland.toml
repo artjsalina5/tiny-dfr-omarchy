@@ -2,7 +2,12 @@
 # Copy to ~/.config/tiny-dfr/hyprland.toml to customize
 
 Hyprland_Expand_ActiveWindow = [
-    { Class = "code", LayerKeys = [
+  # Default catch-all: screenshot region for any window without specific bindings
+  { Class = "*", LayerKeys = [
+    { Icon = "screenshot", Action = "Command_ScreenshotRegion", ShowButtonOutlines = true },
+  ] },
+
+  { Class = "code", LayerKeys = [
         { Icon = "command", Action = "F1", ShowButtonOutlines = true },
         { Text = "Format Document", Action = "KeyCombos_CTRL_SHIFT_I", ShowButtonOutlines = true },
     ] },

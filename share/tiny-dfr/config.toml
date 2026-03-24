@@ -7,7 +7,10 @@ ShowButtonOutlines = false
 EnablePixelShift = false
 
 # Font
-FontTemplate = "CaskaydiaMonoNerdFontMono:light"
+# Available fonts: Adwaita Mono, iA Writer Mono S, JetBrainsMono Nerd Font, JetBrainsMono Nerd Font Mono, JetBrainsMonoNL Nerd Font, JetBrainsMonoNL Nerd Font Mono, Liberation Mono, Nimbus Mono PS, Ubuntu Mono
+# Format: "FontName:weight" where weight can be: thin, ultralight, light, book, medium, semibold, bold, ultrabold, heavy, ultraheavy
+# Example: "JetBrainsMono Nerd Font:bold" or "Ubuntu Mono:medium"
+FontTemplate = "JetBrainsMono Nerd Font:light"
 
 # Brightness
 AdaptiveBrightness = false

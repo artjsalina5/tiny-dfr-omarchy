@@ -34,13 +34,14 @@ Command_ScreenrecordDisplayAudio = "sh -c \"omarchy-cmd-screenrecord display-aud
 
 # Apps
 Command_Btop        = "tiny-dfr-terminal-exec btop"
-Command_Wiremix     = "wiremix"
+Command_Wiremix     = "tiny-dfr-terminal-exec wiremix"
 Command_Walker      = "walker"
 Command_Browser     = "xdg-open https://"
-Command_Editor      = "code"
-Command_WiFi        = "nmtui"
+Command_Editor      = "tiny-dfr-terminal-exec "$EDITOR""
+Command_WiFi        = "tiny-dfr-terminal-exec impala"
 Command_Screensaver = "hyprlock"
 Command_Share       = "wl-copy"
+Command_Bluetooth   = "tiny-dfr-terminal-exec bluetui"
 Command_AudioSwitch = "wpctl set-default"
 Command_Clipboard   = "uwsm app -- cliphist list | wofi --dmenu | cliphist decode | wl-copy"
 Command_WindowCloseAll     = "hyprctl dispatch killactive"
