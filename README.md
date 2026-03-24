@@ -63,9 +63,8 @@ Config files load in priority order:
 
 1. `/usr/share/tiny-dfr/` (defaults)
 2. `/etc/tiny-dfr/` (system overrides)
-3. `~/.config/tiny-dfr/` (user overrides)
 
-Copy files from `share/tiny-dfr/` to customize.
+Copy files from `share/tiny-dfr/` to `/etc/tiny-dfr/` to customize.
 
 ### config.toml
 

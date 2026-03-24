@@ -125,26 +125,14 @@ echo "Detected user paths: $USER_PATHS"
 
 # Install configs (always update with backups)
 sudo mkdir -p /etc/tiny-dfr
-USER_CFG_DIR="$USER_HOME/.config/tiny-dfr"
-mkdir -p "$USER_CFG_DIR"
 
 TS=$(date +%Y%m%d%H%M%S)
 for f in config.toml commands.toml expandables.toml hyprland.toml; do
-    # System config
-    if [ -f "/etc/tiny-dfr/$f" ]; then
-        sudo cp "/etc/tiny-dfr/$f" "/etc/tiny-dfr/$f.bak.$TS"
-    fi
-    sudo cp "/usr/share/tiny-dfr/$f" "/etc/tiny-dfr/$f"
-    
-    # User config
-    if [ -f "$USER_CFG_DIR/$f" ]; then
-        cp "$USER_CFG_DIR/$f" "$USER_CFG_DIR/$f.bak.$TS"
-    fi
-    cp "/usr/share/tiny-dfr/$f" "$USER_CFG_DIR/$f"
+  if [ -f "/etc/tiny-dfr/$f" ]; then
+    sudo cp "/etc/tiny-dfr/$f" "/etc/tiny-dfr/$f.bak.$TS"
+  fi
+  sudo cp "/usr/share/tiny-dfr/$f" "/etc/tiny-dfr/$f"
 done
-
-# Ensure correct ownership
-chown -R "$CURRENT_USER":"$CURRENT_USER" "$USER_HOME/.config/tiny-dfr"
 
 # Create user-specific environment configuration
 sudo tee /etc/tiny-dfr/user-env.toml > /dev/null <<EOF
