@@ -1,8 +1,6 @@
 # tiny-dfr expandables
-# Copy to ~/.config/tiny-dfr/expandables.toml to customize
 
 # Omarchy menu
-
 Expand_Omarchy = [
   { Text = "Apps",    Action = "Command_OmarchyApps",    ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "Trigger", Action = "Command_OmarchyTrigger", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
@@ -15,17 +13,17 @@ Expand_Omarchy = [
 
 # Settings
 Expand_Settings = [
-  { Icon = "brightness_low", Action = "Command_BrightnessDown", ShowButtonOutlines = false },
-  { Icon = "brightness_high", Action = "Command_BrightnessUp", ShowButtonOutlines = false },
-  { Icon = "mic_off", Action = "MicMute", ShowButtonOutlines = false },
-  { Icon = "backlight_low", Action = "IllumDown", ShowButtonOutlines = false },
-  { Icon = "backlight_high", Action = "IllumUp", ShowButtonOutlines = false },
-  { Icon = "fast_rewind", Action = "PreviousSong", ShowButtonOutlines = false },
-  { Icon = "play_pause", Action = "PlayPause", ShowButtonOutlines = false },
-  { Icon = "fast_forward", Action = "NextSong", ShowButtonOutlines = false },
-  { Icon = "volume_off", Action = "Mute", ShowButtonOutlines = false },
-  { Icon = "volume_down", Action = "VolumeDown", ShowButtonOutlines = false },
-  { Icon = "volume_up", Action = "VolumeUp", ShowButtonOutlines = false },
+  { Icon = "brightness_low",   Action = "BrightnessDown",  ShowButtonOutlines = false },
+  { Icon = "brightness_high",  Action = "BrightnessUp",    ShowButtonOutlines = false },
+  { Icon = "mic_off",          Action = "MicMute",         ShowButtonOutlines = false },
+  { Icon = "backlight_low",    Action = "IllumDown",       ShowButtonOutlines = false },
+  { Icon = "backlight_high",   Action = "IllumUp",         ShowButtonOutlines = false },
+  { Icon = "fast_rewind",      Action = "PreviousSong",    ShowButtonOutlines = false },
+  { Icon = "play_pause",       Action = "PlayPause",       ShowButtonOutlines = false },
+  { Icon = "fast_forward",     Action = "NextSong",        ShowButtonOutlines = false },
+  { Icon = "volume_off",       Action = "Mute",            ShowButtonOutlines = false },
+  { Icon = "volume_down",      Action = "VolumeDown",      ShowButtonOutlines = false },
+  { Icon = "volume_up",        Action = "VolumeUp",        ShowButtonOutlines = false },
 ]
 
 Expand_Trigger = [
@@ -45,18 +43,17 @@ Expand_Screenshot = [
 
 # Apps
 Expand_Apps = [
-  { Text = "", Action = "Command_Btop", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "", Action = "Command_Btop",    ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "󰕾", Action = "Command_Wiremix", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "󰍉", Action = "Command_Walker", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "", Action = "Command_Bluetooth", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "󰍉", Action = "Command_Walker",  ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "󰖟", Action = "Command_Browser", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "", Action = "Command_Editor", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "", Action = "Command_WiFi", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "", Action = "Command_Editor",  ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "", Action = "Command_WiFi",    ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "󰒲", Action = "Command_Screensaver", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "", Action = "Command_Share", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "", Action = "Command_Share",   ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "󰕾", Action = "Command_AudioSwitch", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "", Action = "Command_WindowCloseAll", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "󰁔", Action = "Command_WindowPop", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "󰁔", Action = "Command_WindowPop",      ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "󰏬", Action = "Command_WorkspaceToggleGaps", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
 ]
 

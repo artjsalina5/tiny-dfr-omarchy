@@ -1,16 +1,18 @@
 # tiny-dfr config
-# Copy to ~/.config/tiny-dfr/config.toml to customize
 
 # Display
+
+# By default, the media layer will show the omarchy layer.
 MediaLayerDefault = true
 ShowButtonOutlines = false
+
+# Disabled by default
 EnablePixelShift = false
 
 # Font
-# Available fonts: Adwaita Mono, iA Writer Mono S, JetBrainsMono Nerd Font, JetBrainsMono Nerd Font Mono, JetBrainsMonoNL Nerd Font, JetBrainsMonoNL Nerd Font Mono, Liberation Mono, Nimbus Mono PS, Ubuntu Mono
-# Format: "FontName:weight" where weight can be: thin, ultralight, light, book, medium, semibold, bold, ultrabold, heavy, ultraheavy
-# Example: "JetBrainsMono Nerd Font:bold" or "Ubuntu Mono:medium"
-FontTemplate = "JetBrainsMono Nerd Font:light"
+# NOTE: Will default to a non mono space font and breaks glyph icons if
+# incorrect!
+FontTemplate = "CaskaydiaMonoNerdFontMono:light"
 
 # Brightness
 AdaptiveBrightness = false
@@ -23,7 +25,7 @@ KeyboardBrightnessStep = 1466
 # Navigation
 BackButtonShowOutlines = false
 BackButtonOutlineColor = 0.3
-ExpandableTimeoutSeconds = 5
+ExpandableTimeoutSeconds = 10
 
 # Primary layer (F1-F12)
 PrimaryLayerKeys = [

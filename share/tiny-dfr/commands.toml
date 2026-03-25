@@ -1,8 +1,7 @@
 # tiny-dfr commands
-# Copy to ~/.config/tiny-dfr/commands.toml to customize
 
 Command_1  = "omarchy-menu"
-Command_2 = "alacritty"
+Command_2  = "uwsm app -- alacritty"
 Command_3  = "omarchy-menu apps"
 Command_4  = "omarchy-menu trigger"
 Command_5  = "omarchy-menu setup"
@@ -18,7 +17,7 @@ Command_OmarchySetup   = "omarchy-menu setup"
 Command_OmarchyInstall = "omarchy-menu install"
 Command_OmarchyRemove  = "omarchy-menu remove"
 Command_OmarchySystem  = "omarchy-menu system"
-Command_Alacritty = "alacritty"
+Command_Alacritty      = "uwsm app -- alacritty"
 Command_ColorPicker    = "pkill hyprpicker || hyprpicker -a"
 
 # Screenshots
@@ -34,22 +33,15 @@ Command_ScreenrecordDisplayAudio = "sh -c \"omarchy-cmd-screenrecord display-aud
 
 # Apps
 Command_Btop        = "tiny-dfr-terminal-exec btop"
-Command_Wiremix     = "tiny-dfr-terminal-exec wiremix"
+Command_Wiremix     = "wiremix"
 Command_Walker      = "walker"
 Command_Browser     = "xdg-open https://"
-Command_Editor      = "tiny-dfr-terminal-exec "$EDITOR""
-Command_WiFi        = "tiny-dfr-terminal-exec impala"
+Command_Editor      = "code"
+Command_WiFi        = "nmtui"
 Command_Screensaver = "hyprlock"
 Command_Share       = "wl-copy"
-Command_Bluetooth   = "tiny-dfr-terminal-exec bluetui"
 Command_AudioSwitch = "wpctl set-default"
-Command_Clipboard = "cliphist list | wofi --dmenu | cliphist decode | wl-copy"
+Command_Clipboard   = "uwsm app -- cliphist list | wofi --dmenu | cliphist decode | wl-copy"
 Command_WindowCloseAll     = "hyprctl dispatch killactive"
-Command_WindowPop = "hyprctl dispatch togglefloating"
+Command_WindowPop          = "hyprctl dispatch togglefloating"
 Command_WorkspaceToggleGaps = "hyprctl keyword general:gaps_in 0"
-
-# Display brightness (T2 MacBook compatible)
-Command_BrightnessUp = "brightnessctl set +5%"
-Command_BrightnessDown = "brightnessctl set 5%-"
-Command_BrightnessUpFine = "brightnessctl set +1%"
-Command_BrightnessDownFine = "brightnessctl set 1%-"
