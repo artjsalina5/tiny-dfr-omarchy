@@ -20,6 +20,10 @@ Command_OmarchySystem  = "omarchy-menu system"
 Command_Alacritty      = "uwsm app -- alacritty"
 Command_ColorPicker    = "pkill hyprpicker || hyprpicker -a"
 
+# Display brightness (internal panel via iGPU gmux backlight)
+Command_DisplayBrightnessDown = "brightnessctl -d gmux_backlight set 5%-"
+Command_DisplayBrightnessUp   = "brightnessctl -d gmux_backlight set +5%"
+
 # Screenshots
 Command_ScreenshotRegion  = "sh -c \"omarchy-cmd-screenshot region\""
 Command_ScreenshotWindow  = "sh -c \"omarchy-cmd-screenshot windows\""

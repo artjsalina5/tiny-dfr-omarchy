@@ -12,7 +12,7 @@ EnablePixelShift = false
 # Font
 # NOTE: Will default to a non mono space font and breaks glyph icons if
 # incorrect!
-FontTemplate = "CaskaydiaMonoNerdFontMono:light"
+FontTemplate = "JetBrainsMono Nerd Font Mono:light"
 
 # Brightness
 AdaptiveBrightness = false
