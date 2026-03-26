@@ -1,0 +1,57 @@
+#!/bin/bash
+set -euo pipefail
+
+STATE_DIR="/run/tiny-dfr"
+STATE_FILE="${STATE_DIR}/kbd_backlight.saved"
+
+find_kbd_backlight_path() {
+    local candidates=(
+        "/sys/class/leds/smc::kbd_backlight/brightness"
+        "/sys/class/leds/*kbd_backlight*/brightness"
+        "/sys/class/leds/*keyboard*backlight*/brightness"
+    )
+
+    local path
+    for pattern in "${candidates[@]}"; do
+        for path in $pattern; do
+            if [[ -w "$path" ]]; then
+                echo "$path"
+                return 0
+            fi
+        done
+    done
+
+    return 1
+}
+
+save_and_turn_off() {
+    local brightness_path
+    brightness_path="$(find_kbd_backlight_path)" || exit 0
+
+    mkdir -p "$STATE_DIR"
+    cat "$brightness_path" > "$STATE_FILE" || true
+    echo 0 > "$brightness_path" || true
+}
+
+restore_backlight() {
+    local brightness_path
+    brightness_path="$(find_kbd_backlight_path)" || exit 0
+
+    if [[ -f "$STATE_FILE" ]]; then
+        cat "$STATE_FILE" > "$brightness_path" || true
+        rm -f "$STATE_FILE"
+    fi
+}
+
+case "${1:-}" in
+    save-off)
+        save_and_turn_off
+        ;;
+    restore)
+        restore_backlight
+        ;;
+    *)
+        echo "Usage: $0 {save-off|restore}" >&2
+        exit 2
+        ;;
+esac
