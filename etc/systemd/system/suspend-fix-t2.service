@@ -32,15 +32,16 @@ ExecStop=-/usr/bin/modprobe apple-bce
 # ExecStop=-/usr/bin/modprobe brcmfmac_wcc
 
 #touchbar and dependencies - BCE-aware resume sequence
-ExecStop=/usr/bin/wait-for-device.sh touchbar-bce 10
+ExecStop=-/usr/bin/wait-for-device.sh touchbar-bce 10
 ExecStop=-/usr/bin/modprobe hid_appletb_bl
-ExecStop=/usr/bin/wait-for-device.sh hid-backlight 4
+ExecStop=-/usr/bin/wait-for-device.sh hid-backlight 4
 ExecStop=-/usr/bin/modprobe hid_appletb_kbd
-ExecStop=/usr/bin/wait-for-device.sh hid-kbd 4
+ExecStop=-/usr/bin/wait-for-device.sh hid-kbd 4
 ExecStop=-/usr/bin/tiny-dfr-kbd-backlight restore
 ExecStop=-/usr/bin/modprobe appletbdrm
-ExecStop=/usr/bin/wait-for-device.sh touchbar-minimal 4
-ExecStop=-/usr/bin/systemctl restart omarchy-dynamic-function-row-daemon.service
+ExecStop=-/usr/bin/wait-for-device.sh touchbar-minimal 4
+ExecStopPost=-/usr/bin/systemctl reset-failed omarchy-dynamic-function-row-daemon.service
+ExecStopPost=-/usr/bin/systemctl restart omarchy-dynamic-function-row-daemon.service
 
 [Install]
 WantedBy=sleep.target
