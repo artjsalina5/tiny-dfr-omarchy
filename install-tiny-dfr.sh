@@ -74,6 +74,9 @@ sudo cp etc/systemd/system/suspend-fix-t2.service /etc/systemd/system/
 sudo cp etc/systemd/system/tiny-dfr.service /etc/systemd/system/
 sudo install -Dm755 bin/tiny-dfr-terminal-exec /usr/bin/tiny-dfr-terminal-exec
 sudo install -Dm755 bin/wait-for-device.sh /usr/bin/wait-for-device.sh
+sudo install -Dm755 bin/omarchy-touchbar-status /usr/bin/omarchy-touchbar-status
+sudo install -Dm755 bin/omarchy-touchbar-restart /usr/bin/omarchy-touchbar-restart
+sudo install -Dm755 bin/omarchy-touchbar-debug /usr/bin/omarchy-touchbar-debug
 
 # Install udev rules
 sudo cp etc/udev/rules.d/99-touchbar-seat.rules /etc/udev/rules.d/
@@ -123,6 +126,10 @@ echo "Detected user: $CURRENT_USER"
 echo "Detected UID: $USER_UID"
 echo "Detected Wayland display: $WAYLAND_DISPLAY_VALUE"
 echo "Detected user paths: $USER_PATHS"
+
+# Install Omarchy theme hook for instant Touch Bar theme updates
+mkdir -p "$USER_HOME/.config/omarchy/hooks"
+install -Dm755 etc/omarchy/hooks/theme-set "$USER_HOME/.config/omarchy/hooks/theme-set"
 
 # Install configs (always update with backups)
 sudo mkdir -p /etc/tiny-dfr
