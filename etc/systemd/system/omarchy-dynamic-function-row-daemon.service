@@ -1,5 +1,5 @@
 [Unit]
-Description=Legacy alias for Omarchy Dynamic Function Row Daemon
+Description=Omarchy Dynamic Function Row Daemon
 After=systemd-user-sessions.service systemd-logind.service dev-tiny_dfr_display.device dev-tiny_dfr_backlight.device dev-tiny_dfr_display_backlight.device
 BindsTo=dev-tiny_dfr_display.device dev-tiny_dfr_backlight.device dev-tiny_dfr_display_backlight.device
 
@@ -36,11 +36,11 @@ PrivateTmp=false
 # === SECURITY: Keep essential protections that don't interfere ===
 
 # Protect kernel features we don't need (but allow backlight access)
-# ProtectKernelTunables=true  # Disabled - tiny-dfr needs to write to /sys/class/backlight
+# ProtectKernelTunables=true  # Disabled - daemon needs to write to /sys/class/backlight
 ProtectKernelModules=true
 ProtectControlGroups=true
 
-# Restrict network access (tiny-dfr doesn't need network)
+# Restrict network access (daemon doesn't need network)
 PrivateNetwork=true
 
 # Restrict capabilities to only what's needed

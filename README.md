@@ -1,8 +1,8 @@
-# tiny-dfr (Omarchy Fork)
+# omarchy-dynamic-function-row-daemon
 
 **Version 0.5.0**
 
-Touch Bar daemon for Apple T2 and Silicon Macs. Fork of [tiny-dfr](https://github.com/AsahiLinux/tiny-dfr) with working suspend/resume, Hyprland integration, and better configuration.
+Touch Bar daemon for Apple T2 and Silicon Macs. Omarchy-flavored fork of [tiny-dfr](https://github.com/AsahiLinux/tiny-dfr) with working suspend/resume, Hyprland integration, and better configuration.
 
 ## Features
 
