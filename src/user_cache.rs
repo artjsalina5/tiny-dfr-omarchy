@@ -19,8 +19,8 @@ impl CachedUserEnvironment {
             if let Some(uid) = get_user_id(&username) {
                 let home_dir = format!("/home/{}", username);
                 let runtime_dir = format!("/run/user/{}", uid);
-                let wayland_display = detect_wayland_display(&runtime_dir)
-                    .unwrap_or_else(|| "wayland-1".to_string());
+                let wayland_display =
+                    detect_wayland_display(&runtime_dir).unwrap_or_else(|| "wayland-1".to_string());
                 let enhanced_path = format!(
                     "{}/.local/share/omarchy/bin:{}/.local/bin:{}/.config/nvm/versions/node/latest/bin:{}/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/bin:/bin:/var/lib/flatpak/exports/bin",
                     home_dir, home_dir, home_dir, home_dir
@@ -119,7 +119,8 @@ fn detect_desktop_user() -> Option<String> {
     // Method 2: Check loginctl for active graphical sessions (works for both X11 and Wayland)
     if let Ok(output) = std::process::Command::new("loginctl")
         .args(&["list-sessions", "--no-legend"])
-        .output() {
+        .output()
+    {
         if let Ok(sessions) = String::from_utf8(output.stdout) {
             for line in sessions.lines() {
                 let parts: Vec<&str> = line.split_whitespace().collect();
@@ -127,9 +128,12 @@ fn detect_desktop_user() -> Option<String> {
                     // Check if this session has a graphical environment
                     if let Ok(session_output) = std::process::Command::new("loginctl")
                         .args(&["show-session", parts[0], "-p", "Type"])
-                        .output() {
+                        .output()
+                    {
                         if let Ok(session_info) = String::from_utf8(session_output.stdout) {
-                            if session_info.contains("Type=wayland") || session_info.contains("Type=x11") {
+                            if session_info.contains("Type=wayland")
+                                || session_info.contains("Type=x11")
+                            {
                                 return Some(parts[2].to_string());
                             }
                         }
@@ -144,13 +148,15 @@ fn detect_desktop_user() -> Option<String> {
         for entry in entries.flatten() {
             if let Some(uid_str) = entry.file_name().to_str() {
                 if let Ok(uid) = uid_str.parse::<u32>() {
-                    if uid >= 1000 && uid < 65534 { // Regular user UID range
+                    if uid >= 1000 && uid < 65534 {
+                        // Regular user UID range
                         let wayland_socket = entry.path().join("wayland-0");
                         if wayland_socket.exists() {
                             // Get username from UID
                             if let Ok(output) = std::process::Command::new("getent")
                                 .args(&["passwd", uid_str])
-                                .output() {
+                                .output()
+                            {
                                 if let Ok(passwd_line) = String::from_utf8(output.stdout) {
                                     if let Some(username) = passwd_line.split(':').next() {
                                         return Some(username.to_string());
@@ -170,7 +176,8 @@ fn detect_desktop_user() -> Option<String> {
 fn get_user_id(username: &str) -> Option<u32> {
     if let Ok(output) = std::process::Command::new("id")
         .args(&["-u", username])
-        .output() {
+        .output()
+    {
         if let Ok(uid_str) = String::from_utf8(output.stdout) {
             return uid_str.trim().parse().ok();
         }

@@ -196,10 +196,13 @@ impl DrmBackend {
                     )),
                 }
             }
-            
+
             if attempt < max_attempts - 1 {
-                eprintln!("Touch Bar DRM device not found (attempt {}/{}), retrying in 2s...", 
-                         attempt + 1, max_attempts);
+                eprintln!(
+                    "Touch Bar DRM device not found (attempt {}/{}), retrying in 2s...",
+                    attempt + 1,
+                    max_attempts
+                );
                 eprintln!("Attempted devices: [{}]", errors.join(", "));
                 std::thread::sleep(std::time::Duration::from_secs(2));
             } else {

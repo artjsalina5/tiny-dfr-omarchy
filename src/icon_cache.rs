@@ -1,9 +1,9 @@
+use freedesktop_icons::lookup;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use freedesktop_icons::lookup;
 
 use crate::ICON_SIZE;
 
@@ -54,17 +54,23 @@ impl IconCache {
         }
     }
 
-    fn add_pending_request(&mut self, key: String, sender: std::sync::mpsc::Sender<Option<PathBuf>>) {
-        self.pending_requests.entry(key).or_insert_with(Vec::new).push(sender);
+    fn add_pending_request(
+        &mut self,
+        key: String,
+        sender: std::sync::mpsc::Sender<Option<PathBuf>>,
+    ) {
+        self.pending_requests
+            .entry(key)
+            .or_insert_with(Vec::new)
+            .push(sender);
     }
 
     fn cleanup_old_entries(&mut self) {
         let now = Instant::now();
         let max_age = Duration::from_secs(300); // 5 minutes
 
-        self.cache.retain(|_, entry| {
-            now.duration_since(entry.last_accessed) < max_age
-        });
+        self.cache
+            .retain(|_, entry| now.duration_since(entry.last_accessed) < max_age);
     }
 }
 
@@ -149,7 +155,11 @@ impl IconLoader {
         None
     }
 
-    pub fn load_async(&self, name: String, theme: Option<String>) -> std::sync::mpsc::Receiver<Option<PathBuf>> {
+    pub fn load_async(
+        &self,
+        name: String,
+        theme: Option<String>,
+    ) -> std::sync::mpsc::Receiver<Option<PathBuf>> {
         let cache_key = format!("{}:{}", name, theme.as_deref().unwrap_or(""));
 
         // Check cache first
@@ -205,7 +215,10 @@ pub fn get_icon_cached(name: String, theme: Option<String>) -> Option<PathBuf> {
     }
 }
 
-pub fn load_icon_async(name: String, theme: Option<String>) -> std::sync::mpsc::Receiver<Option<PathBuf>> {
+pub fn load_icon_async(
+    name: String,
+    theme: Option<String>,
+) -> std::sync::mpsc::Receiver<Option<PathBuf>> {
     ICON_LOADER.load_async(name, theme)
 }
 
@@ -242,22 +255,43 @@ pub fn preload_common_icons() {
 // Preload common application icons
 pub fn preload_app_icons() {
     let common_app_classes = vec![
-        "code", "Code", "VSCode",
-        "firefox", "Firefox",
-        "chromium", "Chromium", "chrome", "Chrome",
-        "alacritty", "Alacritty",
-        "terminal", "Terminal", "gnome-terminal",
-        "nautilus", "Nautilus", "Files",
-        "discord", "Discord",
-        "spotify", "Spotify",
-        "steam", "Steam",
-        "obs", "OBS",
-        "gimp", "GIMP",
-        "inkscape", "Inkscape",
-        "blender", "Blender",
-        "thunderbird", "Thunderbird",
-        "libreoffice", "LibreOffice",
-        "vlc", "VLC",
+        "code",
+        "Code",
+        "VSCode",
+        "firefox",
+        "Firefox",
+        "chromium",
+        "Chromium",
+        "chrome",
+        "Chrome",
+        "alacritty",
+        "Alacritty",
+        "terminal",
+        "Terminal",
+        "gnome-terminal",
+        "nautilus",
+        "Nautilus",
+        "Files",
+        "discord",
+        "Discord",
+        "spotify",
+        "Spotify",
+        "steam",
+        "Steam",
+        "obs",
+        "OBS",
+        "gimp",
+        "GIMP",
+        "inkscape",
+        "Inkscape",
+        "blender",
+        "Blender",
+        "thunderbird",
+        "Thunderbird",
+        "libreoffice",
+        "LibreOffice",
+        "vlc",
+        "VLC",
     ];
 
     for class in common_app_classes {
