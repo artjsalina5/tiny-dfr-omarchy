@@ -1,7 +1,6 @@
 [Unit]
 Description=Legacy alias for Omarchy Dynamic Function Row Daemon
-After=systemd-user-sessions.service systemd-logind.service dev-tiny_dfr_display.device dev-tiny_dfr_backlight.device dev-tiny_dfr_display_backlight.device
-BindsTo=dev-tiny_dfr_display.device dev-tiny_dfr_backlight.device dev-tiny_dfr_display_backlight.device
+After=systemd-user-sessions.service systemd-logind.service
 
 [Service]
 User=root
