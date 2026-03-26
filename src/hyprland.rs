@@ -1,10 +1,18 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::path::PathBuf;
+use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct HyprlandWorkspace {
+    pub id: i32,
+    pub name: String,
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HyprlandWindow {
@@ -16,8 +24,15 @@ pub struct HyprlandWindow {
     #[serde(rename = "workspace")]
     pub workspace: HyprlandWorkspace,
     pub floating: bool,
+    #[serde(default)]
     pub pseudo: bool,
     pub monitor: i32,
+    #[serde(default)]
+    pub content_type: String,
+    #[serde(default)]
+    pub over_fullscreen: bool,
+    #[serde(default)]
+    pub stable_id: String,
     #[serde(rename = "class")]
     pub class: String,
     pub title: String,
@@ -44,244 +59,9 @@ pub struct HyprlandWindow {
     pub xdg_description: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct HyprlandWorkspace {
-    pub id: i32,
-    pub name: String,
-}
-
-pub struct HyprlandIpc {
-    socket_path: String,
-    socket2_path: String,
-}
-
-// Global cache for the active window info
-static CACHED_WINDOW_INFO: std::sync::LazyLock<Arc<Mutex<Option<ActiveWindowInfo>>>> =
-    std::sync::LazyLock::new(|| Arc::new(Mutex::new(None)));
-
-static EVENT_LISTENER_STARTED: std::sync::LazyLock<Arc<Mutex<bool>>> =
-    std::sync::LazyLock::new(|| Arc::new(Mutex::new(false)));
-
-static CACHE_UPDATED: std::sync::LazyLock<Arc<Mutex<bool>>> =
-    std::sync::LazyLock::new(|| Arc::new(Mutex::new(false)));
-
-// Deduplicate noisy socket discovery logs
-static LAST_LOGGED_SOCKET: std::sync::LazyLock<Arc<Mutex<Option<String>>>> =
-    std::sync::LazyLock::new(|| Arc::new(Mutex::new(None)));
-
-// Cache discovered sockets to avoid repeated scans/logs
-static DISCOVERED_SOCKETS: std::sync::LazyLock<Arc<Mutex<Option<(String, String)>>>> =
-    std::sync::LazyLock::new(|| Arc::new(Mutex::new(None)));
-static LAST_DISCOVERY: std::sync::LazyLock<Arc<Mutex<Option<Instant>>>> =
-    std::sync::LazyLock::new(|| Arc::new(Mutex::new(None)));
-
-const REDISCOVER_BACKOFF: Duration = Duration::from_secs(10);
-
-fn discover_hyprland_sockets() -> Option<(String, String)> {
-    // Prefer environment signature when available
-    if let Ok(signature) = std::env::var("HYPRLAND_INSTANCE_SIGNATURE") {
-        let socket_path = format!("/tmp/hypr/{}/.socket.sock", signature);
-        let socket2_path = format!("/tmp/hypr/{}/.socket2.sock", signature);
-        if std::path::Path::new(&socket_path).exists() {
-            return Some((socket_path, socket2_path));
-        }
-    }
-
-    // Try /tmp/hypr
-    if let Ok(entries) = std::fs::read_dir("/tmp/hypr") {
-        for entry in entries.flatten() {
-            if let Ok(file_type) = entry.file_type() {
-                if file_type.is_dir() {
-                    let socket_path = entry.path().join(".socket.sock");
-                    if socket_path.exists() {
-                        let socket2_path = entry.path().join(".socket2.sock");
-                        return Some((
-                            socket_path.to_string_lossy().to_string(),
-                            socket2_path.to_string_lossy().to_string(),
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    // Try /run/user/*/hypr
-    if let Ok(run_user_entries) = std::fs::read_dir("/run/user") {
-        for user_entry in run_user_entries.flatten() {
-            if let Ok(file_type) = user_entry.file_type() {
-                if file_type.is_dir() {
-                    let hypr_path = user_entry.path().join("hypr");
-                    if hypr_path.exists() {
-                        if let Ok(hypr_entries) = std::fs::read_dir(&hypr_path) {
-                            for hypr_entry in hypr_entries.flatten() {
-                                if let Ok(hypr_file_type) = hypr_entry.file_type() {
-                                    if hypr_file_type.is_dir() {
-                                        let socket_path = hypr_entry.path().join(".socket.sock");
-                                        if socket_path.exists() {
-                                            let socket2_path = hypr_entry.path().join(".socket2.sock");
-                                            return Some((
-                                                socket_path.to_string_lossy().to_string(),
-                                                socket2_path.to_string_lossy().to_string(),
-                                            ));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
-impl HyprlandIpc {
-    pub fn new() -> Result<Self> {
-        // Use cached discovery if available
-        if let Ok(cache) = DISCOVERED_SOCKETS.lock() {
-            if let Some((ref s1, ref s2)) = *cache {
-                return Ok(HyprlandIpc { socket_path: s1.clone(), socket2_path: s2.clone() });
-            }
-        }
-
-        // Rate-limit discovery attempts to avoid log spam
-        if let Ok(mut last) = LAST_DISCOVERY.lock() {
-            if let Some(t) = *last {
-                if t.elapsed() < REDISCOVER_BACKOFF {
-                    return Err(anyhow!("Hyprland not available (cached)"));
-                }
-            }
-            *last = Some(Instant::now());
-        }
-
-        if let Some((s1, s2)) = discover_hyprland_sockets() {
-            // Only log on first discovery or when socket path actually changes
-            let should_log = if let Ok(mut last) = LAST_LOGGED_SOCKET.lock() {
-                let changed = last.as_deref() != Some(&s1);
-                if changed {
-                    *last = Some(s1.clone());
-                }
-                changed
-            } else {
-                false
-            };
-            
-            if should_log {
-                println!("Found Hyprland socket at: {}", s1);
-            }
-            
-            if let Ok(mut cache) = DISCOVERED_SOCKETS.lock() {
-                *cache = Some((s1.clone(), s2.clone()));
-            }
-            return Ok(HyprlandIpc { socket_path: s1, socket2_path: s2 });
-        }
-
-        Err(anyhow!("Could not find Hyprland socket. Make sure Hyprland is running."))
-    }
-
-    pub fn send_command(&self, command: &str) -> Result<String> {
-        let mut stream = UnixStream::connect(&self.socket_path)
-            .map_err(|e| anyhow!("Failed to connect to Hyprland socket: {}", e))?;
-
-        stream.write_all(command.as_bytes())
-            .map_err(|e| anyhow!("Failed to send command: {}", e))?;
-
-        let mut response = String::new();
-        stream.read_to_string(&mut response)
-            .map_err(|e| anyhow!("Failed to read response: {}", e))?;
-
-        Ok(response)
-    }
-
-    pub fn get_active_window(&self) -> Result<HyprlandWindow> {
-        let response = self.send_command("j/activewindow")?;
-        let window: HyprlandWindow = serde_json::from_str(&response)
-            .map_err(|e| anyhow!("Failed to parse active window response: {}", e))?;
-        Ok(window)
-    }
-
-    pub fn get_clients(&self) -> Result<Vec<HyprlandWindow>> {
-        let response = self.send_command("j/clients")?;
-        let clients: Vec<HyprlandWindow> = serde_json::from_str(&response)
-            .map_err(|e| anyhow!("Failed to parse clients response: {}", e))?;
-        Ok(clients)
-    }
-
-    pub fn start_event_listener(&self) -> Result<()> {
-        let socket2_path = self.socket2_path.clone();
-
-        thread::spawn(move || {
-            if let Err(e) = Self::event_listener_loop(&socket2_path) {
-                println!("Hyprland event listener error: {}", e);
-            }
-        });
-
-        Ok(())
-    }
-
-    fn event_listener_loop(socket2_path: &str) -> Result<()> {
-        println!("Starting Hyprland event listener on: {}", socket2_path);
-
-        loop {
-            match UnixStream::connect(socket2_path) {
-                Ok(stream) => {
-                    let reader = BufReader::new(stream);
-                    for line in reader.lines() {
-                        match line {
-                            Ok(event_line) => {
-                                Self::handle_event(&event_line);
-                            }
-                            Err(e) => {
-                                println!("Error reading from Hyprland event socket: {}", e);
-                                break;
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    println!("Failed to connect to Hyprland event socket: {}", e);
-                    thread::sleep(std::time::Duration::from_secs(5));
-                }
-            }
-        }
-    }
-
-    fn handle_event(event_line: &str) {
-        if event_line.starts_with("activewindow>>") {
-            // Parse the activewindow event and update cache
-            // Format: activewindow>>CLASS,TITLE
-            if let Some(data) = event_line.strip_prefix("activewindow>>") {
-                let parts: Vec<&str> = data.splitn(2, ',').collect();
-                if parts.len() == 2 {
-                    let class = parts[0].to_string();
-                    let title = parts[1].to_string();
-
-                    let window_info = ActiveWindowInfo {
-                        title: title.clone(),
-                        class: class.clone(),
-                        initial_title: title.clone(), // We don't have this from events
-                        initial_class: class.clone(), // We don't have this from events
-                    };
-
-                    if let Ok(mut cache) = CACHED_WINDOW_INFO.lock() {
-                        *cache = Some(window_info);
-                        println!("Updated cached window: {} - {}", class, title);
-
-                        // Mark cache as updated
-                        if let Ok(mut updated) = CACHE_UPDATED.lock() {
-                            *updated = true;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ActiveWindowInfo {
+    pub address: String,
     pub title: String,
     pub class: String,
     pub initial_title: String,
@@ -290,7 +70,8 @@ pub struct ActiveWindowInfo {
 
 impl ActiveWindowInfo {
     pub fn from_hyprland_window(window: HyprlandWindow) -> Self {
-        ActiveWindowInfo {
+        Self {
+            address: window.address,
             title: window.title,
             class: window.class,
             initial_title: window.initial_title,
@@ -298,69 +79,672 @@ impl ActiveWindowInfo {
         }
     }
 
-    pub fn get_text_by_button_title(&self, button_title: &str) -> String {
-        match button_title {
-            "title" => self.title.clone(),
-            "class" => self.class.clone(),
-            "initialTitle" => self.initial_title.clone(),
-            "initialClass" => self.initial_class.clone(),
-            _ => self.title.clone(), // default fallback
+    pub fn field(&self, key: &str) -> &str {
+        match key {
+            "title" => &self.title,
+            "class" => &self.class,
+            "initialTitle" => &self.initial_title,
+            "initialClass" => &self.initial_class,
+            "address" => &self.address,
+            _ => &self.title,
         }
     }
 
-    pub fn get_app_icon_name(&self) -> String {
+    // Backward-compatible API used by main.rs
+    pub fn get_text_by_button_title(&self, button_title: &str) -> String {
+        self.field(button_title).to_string()
+    }
+
+    // Use this where the display area is byte-limited.
+    pub fn get_text_by_button_title_limited(&self, button_title: &str, max_bytes: usize) -> String {
+        ellipsize_utf8_bytes(self.field(button_title), max_bytes)
+    }
+
+    pub fn field_ellipsized_chars(&self, key: &str, max_chars: usize) -> String {
+        ellipsize_chars(self.field(key), max_chars)
+    }
+
+    pub fn field_ellipsized_bytes(&self, key: &str, max_bytes: usize) -> String {
+        ellipsize_utf8_bytes(self.field(key), max_bytes)
+    }
+
+    pub fn app_icon_name(&self) -> String {
         format!("app-{}", self.class)
+    }
+
+    // Backward-compatible API used by main.rs
+    pub fn get_app_icon_name(&self) -> String {
+        self.app_icon_name()
     }
 }
 
-pub fn get_active_window_info() -> Result<ActiveWindowInfo> {
-    // Try to create IPC connection - if it fails, Hyprland isn't ready yet
-    let ipc = match HyprlandIpc::new() {
-        Ok(ipc) => ipc,
-        Err(_) => {
-            // Hyprland not available - return a default "waiting" state
-            return Err(anyhow!("Hyprland not available"));
+#[derive(Debug, Clone)]
+pub struct HyprlandSockets {
+    pub command: PathBuf,
+    pub events: PathBuf,
+}
+
+impl HyprlandSockets {
+    pub fn discover() -> Result<Self> {
+        if let Some(sockets) = Self::from_env() {
+            return Ok(sockets);
         }
+
+        if let Some(sockets) = Self::scan_xdg_runtime_dir()? {
+            return Ok(sockets);
+        }
+
+        if let Some(sockets) = Self::scan_tmp_hypr()? {
+            return Ok(sockets);
+        }
+
+        if let Some(sockets) = Self::scan_run_user_hypr()? {
+            return Ok(sockets);
+        }
+
+        Err(anyhow!("could not locate Hyprland IPC sockets"))
+    }
+
+    fn from_env() -> Option<Self> {
+        let runtime = env::var_os("XDG_RUNTIME_DIR")?;
+        let his = env::var_os("HYPRLAND_INSTANCE_SIGNATURE")?;
+
+        let base = PathBuf::from(runtime).join("hypr").join(his);
+        let command = base.join(".socket.sock");
+        let events = base.join(".socket2.sock");
+
+        if command.exists() && events.exists() {
+            Some(Self { command, events })
+        } else {
+            None
+        }
+    }
+
+    fn scan_xdg_runtime_dir() -> Result<Option<Self>> {
+        let runtime = match env::var_os("XDG_RUNTIME_DIR") {
+            Some(v) => PathBuf::from(v),
+            None => return Ok(None),
+        };
+
+        let hypr_dir = runtime.join("hypr");
+        if !hypr_dir.exists() {
+            return Ok(None);
+        }
+
+        for entry in std::fs::read_dir(&hypr_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+
+            let command = path.join(".socket.sock");
+            let events = path.join(".socket2.sock");
+
+            if command.exists() && events.exists() {
+                return Ok(Some(Self { command, events }));
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn scan_tmp_hypr() -> Result<Option<Self>> {
+        let hypr_dir = PathBuf::from("/tmp/hypr");
+        if !hypr_dir.exists() {
+            return Ok(None);
+        }
+
+        for entry in std::fs::read_dir(&hypr_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+
+            let command = path.join(".socket.sock");
+            let events = path.join(".socket2.sock");
+
+            if command.exists() && events.exists() {
+                return Ok(Some(Self { command, events }));
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn scan_run_user_hypr() -> Result<Option<Self>> {
+        let run_user = PathBuf::from("/run/user");
+        if !run_user.exists() {
+            return Ok(None);
+        }
+
+        for user_entry in std::fs::read_dir(&run_user)? {
+            let user_entry = user_entry?;
+            let user_path = user_entry.path();
+            if !user_path.is_dir() {
+                continue;
+            }
+
+            let hypr_dir = user_path.join("hypr");
+            if !hypr_dir.exists() {
+                continue;
+            }
+
+            for entry in std::fs::read_dir(&hypr_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+
+                let command = path.join(".socket.sock");
+                let events = path.join(".socket2.sock");
+
+                if command.exists() && events.exists() {
+                    return Ok(Some(Self { command, events }));
+                }
+            }
+        }
+
+        Ok(None)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct HyprlandIpc {
+    sockets: HyprlandSockets,
+}
+
+impl HyprlandIpc {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            sockets: HyprlandSockets::discover()?,
+        })
+    }
+
+    pub fn send_command(&self, command: &str) -> Result<String> {
+        let mut stream = UnixStream::connect(&self.sockets.command).with_context(|| {
+            format!(
+                "failed to connect to Hyprland command socket {}",
+                self.sockets.command.display()
+            )
+        })?;
+
+        stream
+            .write_all(command.as_bytes())
+            .context("failed to write command to Hyprland socket")?;
+
+        let mut response = String::new();
+        stream
+            .read_to_string(&mut response)
+            .context("failed to read Hyprland response")?;
+
+        Ok(response)
+    }
+
+    pub fn get_active_window(&self) -> Result<HyprlandWindow> {
+        let response = self.send_command("j/activewindow")?;
+        serde_json::from_str(&response).context("failed to parse j/activewindow response")
+    }
+
+    pub fn get_clients(&self) -> Result<Vec<HyprlandWindow>> {
+        let response = self.send_command("j/clients")?;
+        serde_json::from_str(&response).context("failed to parse j/clients response")
+    }
+
+    pub fn start_event_listener(&self) {
+        let sockets = self.sockets.clone();
+        thread::spawn(move || {
+            event_listener_loop(sockets);
+        });
+    }
+}
+
+#[derive(Debug, Clone)]
+enum HyprEvent {
+    ActiveWindowV2 { address: String },
+    WindowTitleV2 { address: String, title: String },
+    ActiveWindow { class: String, title: String },
+    Unknown,
+}
+
+fn parse_event_line(line: &str) -> HyprEvent {
+    if let Some(data) = line.strip_prefix("activewindowv2>>") {
+        return HyprEvent::ActiveWindowV2 {
+            address: data.to_string(),
+        };
+    }
+
+    if let Some(data) = line.strip_prefix("windowtitlev2>>") {
+        let mut parts = data.splitn(2, ',');
+        let address = parts.next().unwrap_or_default().to_string();
+        let title = parts.next().unwrap_or_default().to_string();
+        return HyprEvent::WindowTitleV2 { address, title };
+    }
+
+    if let Some(data) = line.strip_prefix("activewindow>>") {
+        let mut parts = data.splitn(2, ',');
+        let class = parts.next().unwrap_or_default().to_string();
+        let title = parts.next().unwrap_or_default().to_string();
+        return HyprEvent::ActiveWindow { class, title };
+    }
+
+    HyprEvent::Unknown
+}
+
+#[derive(Debug, Default)]
+struct SharedState {
+    active: Option<ActiveWindowInfo>,
+    cache_updated: bool,
+    listener_started: bool,
+    last_refresh: Option<Instant>,
+}
+
+static SHARED_STATE: LazyLock<Arc<Mutex<SharedState>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(SharedState::default())));
+
+#[derive(Debug)]
+struct RateLimitState {
+    last_failure_time: Option<Instant>,
+    current_backoff: Duration,
+}
+
+impl Default for RateLimitState {
+    fn default() -> Self {
+        Self {
+            last_failure_time: None,
+            current_backoff: Duration::from_secs(2),
+        }
+    }
+}
+
+static RATE_LIMIT_STATE: LazyLock<Arc<Mutex<RateLimitState>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(RateLimitState::default())));
+
+fn event_listener_loop(initial_sockets: HyprlandSockets) {
+    let mut current_sockets = initial_sockets;
+
+    loop {
+        let stream = match UnixStream::connect(&current_sockets.events) {
+            Ok(stream) => stream,
+            Err(_) => {
+                thread::sleep(Duration::from_secs(2));
+
+                if let Ok(new_sockets) = HyprlandSockets::discover() {
+                    current_sockets = new_sockets;
+                }
+
+                continue;
+            }
+        };
+
+        let reader = BufReader::new(stream);
+
+        for line in reader.lines() {
+            let line = match line {
+                Ok(v) => v,
+                Err(_) => break,
+            };
+
+            handle_event_line(&current_sockets, &line);
+        }
+
+        thread::sleep(Duration::from_millis(250));
+
+        if let Ok(new_sockets) = HyprlandSockets::discover() {
+            current_sockets = new_sockets;
+        }
+    }
+}
+
+fn handle_event_line(sockets: &HyprlandSockets, line: &str) {
+    match parse_event_line(line) {
+        HyprEvent::ActiveWindowV2 { address } => {
+            let _ = address;
+            let _ = refresh_active_window_from_ipc(sockets);
+        }
+        HyprEvent::WindowTitleV2 { address, title } => {
+            if let Ok(mut state) = SHARED_STATE.lock() {
+                if let Some(active) = state.active.as_mut() {
+                    if active.address == address {
+                        active.title = title;
+                        state.cache_updated = true;
+                    }
+                }
+            }
+        }
+        HyprEvent::ActiveWindow { class, title } => {
+            if let Ok(mut state) = SHARED_STATE.lock() {
+                if let Some(active) = state.active.as_mut() {
+                    active.class = class;
+                    active.title = title;
+                    state.cache_updated = true;
+                }
+            }
+        }
+        HyprEvent::Unknown => {}
+    }
+}
+
+fn refresh_active_window_from_ipc(sockets: &HyprlandSockets) -> Result<()> {
+    let ipc = HyprlandIpc {
+        sockets: sockets.clone(),
     };
 
-    // Start event listener if not already started
+    let window = ipc.get_active_window()?;
+    let info = ActiveWindowInfo::from_hyprland_window(window);
+
+    if let Ok(mut state) = SHARED_STATE.lock() {
+        state.active = Some(info);
+        state.cache_updated = true;
+        state.last_refresh = Some(Instant::now());
+    }
+
+    Ok(())
+}
+
+pub fn get_active_window_info() -> Result<ActiveWindowInfo> {
+    // Check rate limiting before attempting IPC connection
     {
-        let mut started = EVENT_LISTENER_STARTED.lock().unwrap();
-        if !*started {
-            if let Ok(()) = ipc.start_event_listener() {
-                *started = true;
+        let rate_limit = RATE_LIMIT_STATE
+            .lock()
+            .map_err(|_| anyhow!("rate limit state poisoned"))?;
+
+        if let Some(last_failure) = rate_limit.last_failure_time {
+            let elapsed = last_failure.elapsed();
+            if elapsed < rate_limit.current_backoff {
+                return Err(anyhow!(
+                    "Hyprland not available (rate limited, retry in {}s)",
+                    (rate_limit.current_backoff - elapsed).as_secs()
+                ));
             }
         }
     }
 
-    // Try to get from cache first
-    if let Ok(cache) = CACHED_WINDOW_INFO.lock() {
-        if let Some(ref cached_info) = *cache {
-            return Ok(cached_info.clone());
+    let ipc = match HyprlandIpc::new() {
+        Ok(ipc) => {
+            // Success: reset backoff state
+            if let Ok(mut rate_limit) = RATE_LIMIT_STATE.lock() {
+                rate_limit.last_failure_time = None;
+                rate_limit.current_backoff = Duration::from_secs(2);
+            }
+            ipc
+        }
+        Err(e) => {
+            // Failure: update backoff state with exponential increase
+            if let Ok(mut rate_limit) = RATE_LIMIT_STATE.lock() {
+                rate_limit.last_failure_time = Some(Instant::now());
+                // Exponential backoff: 2s → 4s → 8s → 16s → 30s (capped)
+                let new_backoff = rate_limit.current_backoff * 2;
+                rate_limit.current_backoff = new_backoff.min(Duration::from_secs(30));
+            }
+            return Err(e);
+        }
+    };
+
+    {
+        let mut state = SHARED_STATE
+            .lock()
+            .map_err(|_| anyhow!("shared state poisoned"))?;
+
+        if !state.listener_started {
+            ipc.start_event_listener();
+            state.listener_started = true;
+        }
+
+        if let Some(active) = state.active.clone() {
+            return Ok(active);
         }
     }
 
-    // If no cache, get it directly and update cache
-    let window = ipc.get_active_window()
-        .map_err(|e| anyhow!("Failed to get active window: {}", e))?;
-    let window_info = ActiveWindowInfo::from_hyprland_window(window);
+    let window = ipc.get_active_window()?;
+    let info = ActiveWindowInfo::from_hyprland_window(window);
 
-    // Update cache
-    if let Ok(mut cache) = CACHED_WINDOW_INFO.lock() {
-        *cache = Some(window_info.clone());
+    if let Ok(mut state) = SHARED_STATE.lock() {
+        state.active = Some(info.clone());
+        state.cache_updated = true;
+        state.last_refresh = Some(Instant::now());
     }
 
-    Ok(window_info)
+    Ok(info)
 }
 
 pub fn check_and_reset_cache_updated() -> bool {
-    if let Ok(mut updated) = CACHE_UPDATED.lock() {
-        let was_updated = *updated;
-        *updated = false;
-        was_updated
+    if let Ok(mut state) = SHARED_STATE.lock() {
+        let updated = state.cache_updated;
+        state.cache_updated = false;
+        updated
     } else {
         false
     }
+}
+
+pub fn ellipsize_chars(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        return s.to_string();
+    }
+
+    if max_chars == 0 {
+        return String::new();
+    }
+
+    if max_chars == 1 {
+        return "…".to_string();
+    }
+
+    let head: String = s.chars().take(max_chars - 1).collect();
+    format!("{head}…")
+}
+
+pub fn truncate_utf8_bytes(s: &str, max_bytes: usize) -> String {
+    if s.len() <= max_bytes {
+        return s.to_string();
+    }
+
+    let mut end = 0;
+    for (idx, _) in s.char_indices() {
+        if idx <= max_bytes {
+            end = idx;
+        } else {
+            break;
+        }
+    }
+
+    s[..end].to_string()
+}
+
+pub fn ellipsize_utf8_bytes(s: &str, max_bytes: usize) -> String {
+    if s.len() <= max_bytes {
+        return s.to_string();
+    }
+
+    if max_bytes == 0 {
+        return String::new();
+    }
+
+    let ellipsis = "…";
+    let reserve = ellipsis.len();
+
+    if max_bytes <= reserve {
+        return truncate_utf8_bytes(ellipsis, max_bytes);
+    }
+
+    let head = truncate_utf8_bytes(s, max_bytes - reserve);
+    format!("{head}{ellipsis}")
+}
+
+fn normalized_key_name(name: &str) -> String {
+    name.trim()
+        .replace('-', "_")
+        .replace('+', "_")
+        .replace(' ', "_")
+        .to_uppercase()
+}
+
+fn parse_key_name(name: &str) -> Option<input_linux::Key> {
+    use input_linux::Key;
+
+    let n = normalized_key_name(name);
+
+    let key = match n.as_str() {
+        // modifiers
+        "CTRL" | "CONTROL" | "LCTRL" | "LEFTCTRL" | "LEFTCONTROL" => Key::LeftCtrl,
+        "RCTRL" | "RIGHTCTRL" | "RIGHTCONTROL" => Key::RightCtrl,
+        "SHIFT" | "LSHIFT" | "LEFTSHIFT" => Key::LeftShift,
+        "RSHIFT" | "RIGHTSHIFT" => Key::RightShift,
+        "ALT" | "LALT" | "LEFTALT" => Key::LeftAlt,
+        "RALT" | "RIGHTALT" | "ALTGR" => Key::RightAlt,
+        "META" | "CMD" | "SUPER" | "WIN" | "LEFTMETA" | "LMETA" | "LEFTSUPER" => Key::LeftMeta,
+        "RMETA" | "RIGHTMETA" | "RIGHTSUPER" | "RSUPER" | "RCMD" => Key::RightMeta,
+
+        // letters
+        "A" => Key::A,
+        "B" => Key::B,
+        "C" => Key::C,
+        "D" => Key::D,
+        "E" => Key::E,
+        "F" => Key::F,
+        "G" => Key::G,
+        "H" => Key::H,
+        "I" => Key::I,
+        "J" => Key::J,
+        "K" => Key::K,
+        "L" => Key::L,
+        "M" => Key::M,
+        "N" => Key::N,
+        "O" => Key::O,
+        "P" => Key::P,
+        "Q" => Key::Q,
+        "R" => Key::R,
+        "S" => Key::S,
+        "T" => Key::T,
+        "U" => Key::U,
+        "V" => Key::V,
+        "W" => Key::W,
+        "X" => Key::X,
+        "Y" => Key::Y,
+        "Z" => Key::Z,
+
+        // numbers
+        "0" | "NUM0" => Key::Num0,
+        "1" | "NUM1" => Key::Num1,
+        "2" | "NUM2" => Key::Num2,
+        "3" | "NUM3" => Key::Num3,
+        "4" | "NUM4" => Key::Num4,
+        "5" | "NUM5" => Key::Num5,
+        "6" | "NUM6" => Key::Num6,
+        "7" | "NUM7" => Key::Num7,
+        "8" | "NUM8" => Key::Num8,
+        "9" | "NUM9" => Key::Num9,
+
+        // function keys
+        "F1" => Key::F1,
+        "F2" => Key::F2,
+        "F3" => Key::F3,
+        "F4" => Key::F4,
+        "F5" => Key::F5,
+        "F6" => Key::F6,
+        "F7" => Key::F7,
+        "F8" => Key::F8,
+        "F9" => Key::F9,
+        "F10" => Key::F10,
+        "F11" => Key::F11,
+        "F12" => Key::F12,
+        "F13" => Key::F13,
+        "F14" => Key::F14,
+        "F15" => Key::F15,
+        "F16" => Key::F16,
+        "F17" => Key::F17,
+        "F18" => Key::F18,
+        "F19" => Key::F19,
+        "F20" => Key::F20,
+        "F21" => Key::F21,
+        "F22" => Key::F22,
+        "F23" => Key::F23,
+        "F24" => Key::F24,
+
+        // navigation/editing
+        "ENTER" | "RETURN" => Key::Enter,
+        "ESC" | "ESCAPE" => Key::Esc,
+        "TAB" => Key::Tab,
+        "SPACE" | "SPACEBAR" => Key::Space,
+        "BACKSPACE" => Key::Backspace,
+        "DELETE" | "DEL" => Key::Delete,
+        "INSERT" | "INS" => Key::Insert,
+        "HOME" => Key::Home,
+        "END" => Key::End,
+        "PAGEUP" | "PGUP" => Key::PageUp,
+        "PAGEDOWN" | "PGDN" | "PGDOWN" => Key::PageDown,
+        "UP" | "UPARROW" => Key::Up,
+        "DOWN" | "DOWNARROW" => Key::Down,
+        "LEFT" | "LEFTARROW" => Key::Left,
+        "RIGHT" | "RIGHTARROW" => Key::Right,
+
+        // punctuation / symbols
+        "MINUS" | "DASH" => Key::Minus,
+        "EQUAL" | "EQUALS" => Key::Equal,
+        "COMMA" => Key::Comma,
+        "DOT" | "PERIOD" => Key::Dot,
+        "SLASH" | "FORWARDSLASH" => Key::Slash,
+        "BACKSLASH" => Key::Backslash,
+        "SEMICOLON" => Key::Semicolon,
+        "APOSTROPHE" | "QUOTE" => Key::Apostrophe,
+        "GRAVE" | "BACKTICK" => Key::Grave,
+        "LEFTBRACE" | "LBRACE" | "LEFTBRACKET" | "LBRACKET" => Key::LeftBrace,
+        "RIGHTBRACE" | "RBRACE" | "RIGHTBRACKET" | "RBRACKET" => Key::RightBrace,
+
+        // keypad
+        "KP0" | "NUMPAD0" => Key::Kp0,
+        "KP1" | "NUMPAD1" => Key::Kp1,
+        "KP2" | "NUMPAD2" => Key::Kp2,
+        "KP3" | "NUMPAD3" => Key::Kp3,
+        "KP4" | "NUMPAD4" => Key::Kp4,
+        "KP5" | "NUMPAD5" => Key::Kp5,
+        "KP6" | "NUMPAD6" => Key::Kp6,
+        "KP7" | "NUMPAD7" => Key::Kp7,
+        "KP8" | "NUMPAD8" => Key::Kp8,
+        "KP9" | "NUMPAD9" => Key::Kp9,
+        "KPPLUS" | "NUMPADPLUS" => Key::KpPlus,
+        "KPMINUS" | "NUMPADMINUS" => Key::KpMinus,
+        "KPASTERISK" | "NUMPADASTERISK" | "KPSTAR" => Key::KpAsterisk,
+        "KPSLASH" | "NUMPADSLASH" => Key::KpSlash,
+        "KPDOT" | "NUMPADDOT" | "KPDECIMAL" => Key::KpDot,
+        "KPENTER" | "NUMPADENTER" => Key::KpEnter,
+
+        // lock / system
+        "CAPSLOCK" => Key::CapsLock,
+        "NUMLOCK" => Key::NumLock,
+        "SCROLLLOCK" => Key::ScrollLock,
+        "PAUSE" => Key::Pause,
+        "MENU" => Key::Menu,
+
+        // print screen / sysrq
+        "PRTSCR" | "PRTSC" | "PRINTSCREEN" | "SYSRQ" => Key::Sysrq,
+        "PRINT" | "ACPRINT" => Key::Print,
+
+        // media / misc
+        "MUTE" | "VOLUMEMUTE" => Key::Mute,
+        "VOLUMEDOWN" => Key::VolumeDown,
+        "VOLUMEUP" => Key::VolumeUp,
+        "PLAYPAUSE" => Key::PlayPause,
+        "PLAY" => Key::Play,
+        "PAUSECD" => Key::PauseCD,
+        "STOPCD" | "STOP" => Key::StopCD,
+        "NEXTSONG" | "NEXTTRACK" => Key::NextSong,
+        "PREVIOUSSONG" | "PREVSONG" | "PREVTRACK" => Key::PreviousSong,
+
+        // brightness / illumination
+        "BRIGHTNESSUP" => Key::BrightnessUp,
+        "BRIGHTNESSDOWN" => Key::BrightnessDown,
+        "ILLUMUP" | "KBDILLUMUP" | "KEYBOARDLIGHTUP" => Key::IllumUp,
+        "ILLUMDOWN" | "KBDILLUMDOWN" | "KEYBOARDLIGHTDOWN" => Key::IllumDown,
+        "ILLUMTOGGLE" | "KBDILLUMTOGGLE" | "KEYBOARDLIGHTTOGGLE" => Key::IllumToggle,
+
+        _ => return None,
+    };
+
+    Some(key)
 }
 
 pub fn parse_key_combos(action: &str) -> Vec<input_linux::Key> {
@@ -368,83 +752,6 @@ pub fn parse_key_combos(action: &str) -> Vec<input_linux::Key> {
         return Vec::new();
     }
 
-    let combo_part = &action[10..]; // Remove "KeyCombos_" prefix
-    let key_parts: Vec<&str> = combo_part.split('_').collect();
-
-    let mut keys = Vec::new();
-
-    for part in key_parts {
-        let key = match part.to_uppercase().as_str() {
-            "CTRL" => input_linux::Key::LeftCtrl,
-            "SHIFT" => input_linux::Key::LeftShift,
-            "ALT" => input_linux::Key::LeftAlt,
-            "META" | "CMD" | "SUPER" => input_linux::Key::LeftMeta,
-            "A" => input_linux::Key::A,
-            "B" => input_linux::Key::B,
-            "C" => input_linux::Key::C,
-            "D" => input_linux::Key::D,
-            "E" => input_linux::Key::E,
-            "F" => input_linux::Key::F,
-            "G" => input_linux::Key::G,
-            "H" => input_linux::Key::H,
-            "I" => input_linux::Key::I,
-            "J" => input_linux::Key::J,
-            "K" => input_linux::Key::K,
-            "L" => input_linux::Key::L,
-            "M" => input_linux::Key::M,
-            "N" => input_linux::Key::N,
-            "O" => input_linux::Key::O,
-            "P" => input_linux::Key::P,
-            "Q" => input_linux::Key::Q,
-            "R" => input_linux::Key::R,
-            "S" => input_linux::Key::S,
-            "T" => input_linux::Key::T,
-            "U" => input_linux::Key::U,
-            "V" => input_linux::Key::V,
-            "W" => input_linux::Key::W,
-            "X" => input_linux::Key::X,
-            "Y" => input_linux::Key::Y,
-            "Z" => input_linux::Key::Z,
-            "F1" => input_linux::Key::F1,
-            "F2" => input_linux::Key::F2,
-            "F3" => input_linux::Key::F3,
-            "F4" => input_linux::Key::F4,
-            "F5" => input_linux::Key::F5,
-            "F6" => input_linux::Key::F6,
-            "F7" => input_linux::Key::F7,
-            "F8" => input_linux::Key::F8,
-            "F9" => input_linux::Key::F9,
-            "F10" => input_linux::Key::F10,
-            "F11" => input_linux::Key::F11,
-            "F12" => input_linux::Key::F12,
-            "ENTER" | "RETURN" => input_linux::Key::Enter,
-            "ESC" | "ESCAPE" => input_linux::Key::Esc,
-            "SPACE" => input_linux::Key::Space,
-            "TAB" => input_linux::Key::Tab,
-            "BACKSPACE" => input_linux::Key::Backspace,
-            "DELETE" => input_linux::Key::Delete,
-            "HOME" => input_linux::Key::Home,
-            "END" => input_linux::Key::End,
-            "PAGEUP" => input_linux::Key::PageUp,
-            "PAGEDOWN" => input_linux::Key::PageDown,
-            "UP" => input_linux::Key::Up,
-            "DOWN" => input_linux::Key::Down,
-            "LEFT" => input_linux::Key::Left,
-            "RIGHT" => input_linux::Key::Right,
-            "1" => input_linux::Key::Num1,
-            "2" => input_linux::Key::Num2,
-            "3" => input_linux::Key::Num3,
-            "4" => input_linux::Key::Num4,
-            "5" => input_linux::Key::Num5,
-            "6" => input_linux::Key::Num6,
-            "7" => input_linux::Key::Num7,
-            "8" => input_linux::Key::Num8,
-            "9" => input_linux::Key::Num9,
-            "0" => input_linux::Key::Num0,
-            _ => continue, // Skip unknown keys
-        };
-        keys.push(key);
-    }
-
-    keys
+    let combo_part = &action["KeyCombos_".len()..];
+    combo_part.split('_').filter_map(parse_key_name).collect()
 }
