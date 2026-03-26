@@ -36,6 +36,12 @@ Command_ThemeNext       = "omarchy-theme-next"
 Command_ThemeCurrent    = "omarchy-theme-current"
 Command_WallpaperNext   = "omarchy-theme-bg-next"
 
+# Touch Bar Diagnostics
+Command_TouchBarStatus    = "omarchy-touchbar-status"
+Command_TouchBarRestart   = "omarchy-touchbar-restart"
+Command_TouchBarLogs      = "sh -lc 'omarchy-launch-terminal -- journalctl -u tiny-dfr.service -f'"
+Command_TouchBarDebug     = "omarchy-touchbar-debug"
+
 # Display brightness (internal panel via iGPU gmux backlight)
 Command_DisplayBrightnessDown = "brightnessctl -d gmux_backlight set 5%-"
 Command_DisplayBrightnessUp   = "brightnessctl -d gmux_backlight set +5%"

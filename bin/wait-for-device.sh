@@ -29,9 +29,39 @@ check_device() {
             # Check for any Touch Bar input device
             compgen -G "/dev/input/by-id/*Touch_Bar*" > /dev/null
             ;;
+        touchbar-minimal)
+            # Check only essential components for Touch Bar rendering
+            [[ -e /dev/dri/card0 ]] && \
+            [[ -e /sys/class/backlight/appletb_backlight ]]
+            ;;
+        touchbar-bce)
+            # BCE mailbox status check for suspend/resume coordination
+            if [[ -f "/sys/class/bce/vhci/cmd_status" ]]; then
+                local status=$(cat "/sys/class/bce/vhci/cmd_status")
+                [[ "$status" != *"VHCI_CMD_T2_PAUSE"* ]] && [[ "$status" != *"SUSPEND"* ]]
+            else
+                false
+            fi
+            ;;
+        touchbar-full)
+            # Full Touch Bar readiness check: BCE + DRM + Backlight
+            check_device touchbar-bce && \
+            [ -e "/dev/dri/card0" ] && \
+            [ -e "/sys/class/backlight/appletb_backlight" ]
+            ;;
+        touchbar-pci-link)
+            # Specifically wait for PCI Express link training (critical after resume)
+            if [[ -f "/sys/class/pci_bus/0000:04/link_status" ]]; then
+                local link_status=$(cat "/sys/class/pci_bus/0000:04/link_status")
+                [[ "$link_status" == *"LINK_STATE_TRAINING_COMPLETE"* ]] || \
+                [[ "$link_status" == *"LINK_ACTIVE"* ]]
+            else
+                false
+            fi
+            ;;
         *)
             echo "Error: Unknown device type '$DEVICE_TYPE'" >&2
-            echo "Supported types: drm, hid-backlight, bce, hid-kbd" >&2
+            echo "Supported types: drm, hid-backlight, bce, hid-kbd, touchbar-minimal, touchbar-bce, touchbar-full, touchbar-pci-link" >&2
             exit 1
             ;;
     esac
