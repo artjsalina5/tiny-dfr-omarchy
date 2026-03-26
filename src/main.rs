@@ -25,10 +25,11 @@ use nix::{
     errno::Errno,
     sys::{
         epoll::{Epoll, EpollCreateFlags, EpollEvent, EpollFlags},
-        signal::{SigSet, Signal},
+        signal::{SaFlags, SigAction, SigHandler, SigSet, Signal},
     },
 };
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::{
     cmp::min,
@@ -68,6 +69,7 @@ const BUTTON_COLOR_INACTIVE: f64 = 0.200;
 const BUTTON_COLOR_ACTIVE: f64 = 0.400;
 const ICON_SIZE: i32 = 48;
 const TIMEOUT_MS: i32 = 10 * 1000;
+static RELOAD_OMARCHY_THEME: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Debug)]
 struct NavigationState {
@@ -850,6 +852,15 @@ impl FunctionLayer {
         c.set_font_face(&config.font_face);
         c.set_font_size(32.0);
 
+        // Pull current Omarchy theme once per frame and reuse for all buttons.
+        let theme_colors = omarchy_theme::get_theme_colors();
+        let theme_active = theme_colors.as_ref().and_then(|colors| colors.accent_rgb());
+        let theme_inactive = theme_colors.as_ref().and_then(|colors| {
+            colors
+                .selection_background_rgb()
+                .or_else(|| colors.accent_rgb().map(|(r, g, b)| (r * 0.45, g * 0.45, b * 0.45)))
+        });
+
         for i in 0..self.buttons.len() {
             let end = if i + 1 < self.buttons.len() {
                 self.buttons[i + 1].0
@@ -885,10 +896,24 @@ impl FunctionLayer {
             }
 
             if button.active {
-                button.set_backround_color(&c, BUTTON_COLOR_ACTIVE);
+                if !matches!(&button.image, ButtonImage::Battery(_, _, _)) {
+                    if let Some((r, g, b)) = theme_active {
+                        c.set_source_rgb(r, g, b);
+                    } else {
+                        button.set_backround_color(&c, BUTTON_COLOR_ACTIVE);
+                    }
+                } else {
+                    button.set_backround_color(&c, BUTTON_COLOR_ACTIVE);
+                }
             } else if show_outline {
                 if let Some(custom_color) = &button.outline_color {
                     custom_color.set_cairo_source(&c);
+                } else if !matches!(&button.image, ButtonImage::Battery(_, _, _)) {
+                    if let Some((r, g, b)) = theme_inactive {
+                        c.set_source_rgb(r, g, b);
+                    } else {
+                        button.set_backround_color(&c, BUTTON_COLOR_INACTIVE);
+                    }
                 } else {
                     button.set_backround_color(&c, BUTTON_COLOR_INACTIVE);
                 }
@@ -1688,6 +1713,10 @@ fn build_libinput_pair() -> Result<(Libinput, Libinput)> {
     Ok((input_tb, input_main))
 }
 
+fn is_touchbar_device(device: &InputDevice) -> bool {
+    device.name().contains("Touch Bar")
+}
+
 fn build_epoll(
     input_main: &Libinput,
     input_tb: &Libinput,
@@ -1869,6 +1898,26 @@ fn expand_user_path(username: &str) -> Result<String, std::io::Error> {
     Ok(paths.join(":"))
 }
 
+extern "C" fn handle_sighup(_: i32) {
+    RELOAD_OMARCHY_THEME.store(true, Ordering::Relaxed);
+}
+
+fn register_theme_reload_signal_handler() -> Result<()> {
+    let action = SigAction::new(
+        SigHandler::Handler(handle_sighup),
+        SaFlags::SA_RESTART,
+        SigSet::empty(),
+    );
+
+    // SAFETY: Installs a process-level SIGHUP handler that only flips an atomic flag.
+    unsafe {
+        nix::sys::signal::sigaction(Signal::SIGHUP, &action)
+            .map_err(|e| anyhow!("failed to install SIGHUP handler: {e}"))?;
+    }
+
+    Ok(())
+}
+
 fn main() {
     let mut drm = DrmBackend::open_card().unwrap();
     let (height, width) = drm.mode().size();
@@ -1904,6 +1953,10 @@ fn real_main(drm: &mut DrmBackend) {
     let mut last_battery_update_minute = Local::now().minute();
     let mut cfg_mgr = ConfigManager::new();
     let (mut cfg, mut layers) = cfg_mgr.load_config(width);
+
+    if let Err(e) = register_theme_reload_signal_handler() {
+        eprintln!("Omarchy theme SIGHUP reload disabled: {e:#}");
+    }
 
     // Initialize keyboard backlight BEFORE dropping privileges
     let mut kbd_backlight = KeyboardBacklightManager::new_with_config(cfg.keyboard_brightness_step);
@@ -2036,6 +2089,11 @@ fn real_main(drm: &mut DrmBackend) {
     let mut pending_actions: Vec<PendingAction> = Vec::new();
     let mut touchbar_runtime_invalidated = false;
     loop {
+        if RELOAD_OMARCHY_THEME.swap(false, Ordering::Relaxed) {
+            omarchy_theme::invalidate_theme_cache();
+            needs_complete_redraw = true;
+        }
+
         if cfg_mgr.update_config(&mut cfg, &mut layers, width) {
             active_layer = 0;
             needs_complete_redraw = true;
@@ -2499,14 +2557,13 @@ fn real_main(drm: &mut DrmBackend) {
             match event {
                 Event::Device(DeviceEvent::Added(evt)) => {
                     let dev = evt.device();
-                    if dev.name().contains(" Touch Bar") {
+                    if is_touchbar_device(&dev) {
                         digitizer = Some(dev);
-                        touchbar_runtime_invalidated = true;
                     }
                 }
                 Event::Device(DeviceEvent::Removed(evt)) => {
                     let dev = evt.device();
-                    if dev.name().contains(" Touch Bar") {
+                    if is_touchbar_device(&dev) {
                         touchbar_runtime_invalidated = true;
                         invalidate_touchbar_runtime(
                             &mut digitizer,
@@ -2529,7 +2586,24 @@ fn real_main(drm: &mut DrmBackend) {
                     }
                 }
                 Event::Touch(te) => {
-                    if Some(te.device()) != digitizer || backlight.current_bl() == 0 {
+                    if backlight.current_bl() == 0 {
+                        continue;
+                    }
+
+                    if !is_touchbar_device(&te.device()) {
+                        continue;
+                    }
+
+                    // Recover digitizer tracking when add/remove ordering changes across resume.
+                    if digitizer.is_none() {
+                        digitizer = Some(te.device());
+                    }
+
+                    if !digitizer
+                        .as_ref()
+                        .map(is_touchbar_device)
+                        .unwrap_or(false)
+                    {
                         continue;
                     }
                     match te {
