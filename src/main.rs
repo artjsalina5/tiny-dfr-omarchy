@@ -1,6 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context as AnyhowContext, Result};
 use cairo::{Antialias, Context, Format, ImageSurface, Surface};
-use chrono::{Local, Locale, Timelike, format::{StrftimeItems, Item as ChronoItem}};
+use chrono::{
+    format::{Item as ChronoItem, StrftimeItems},
+    Local, Locale, Timelike,
+};
 use drm::control::ClipRect;
 use freedesktop_icons::lookup;
 use input::{
@@ -44,14 +47,15 @@ mod fonts;
 mod hyprland;
 mod icon_cache;
 mod keyboard_backlight;
+mod omarchy_theme;
 mod pixel_shift;
 mod system_monitor;
 mod user_cache;
 
-use crate::config::ConfigManager;
 use crate::battery_monitor::BatteryState;
+use crate::config::ConfigManager;
 use backlight::BacklightManager;
-use config::{ButtonConfig, Config, ButtonAction, ButtonColor};
+use config::{ButtonAction, ButtonColor, ButtonConfig, Config};
 use display::DrmBackend;
 use keyboard_backlight::KeyboardBacklightManager;
 use pixel_shift::{PixelShiftManager, PIXEL_SHIFT_WIDTH_PX};
@@ -119,9 +123,9 @@ impl NavigationState {
     }
 
     fn should_timeout(&self, timeout_seconds: u32) -> bool {
-        timeout_seconds > 0 &&
-        self.current_expandable.is_some() &&
-        self.last_interaction_time.elapsed().as_secs() >= timeout_seconds as u64
+        timeout_seconds > 0
+            && self.current_expandable.is_some()
+            && self.last_interaction_time.elapsed().as_secs() >= timeout_seconds as u64
     }
 }
 
@@ -136,7 +140,7 @@ struct BatteryImages {
 enum BatteryIconMode {
     Percentage,
     Icon,
-    Both
+    Both,
 }
 
 impl BatteryIconMode {
@@ -197,7 +201,9 @@ fn try_load_image(name: impl AsRef<str>, theme: Option<impl AsRef<str>>) -> Resu
     let theme_str = theme.as_ref().map(|s| s.as_ref());
 
     // Try cache first for instant results
-    if let Some(cached_path) = icon_cache::get_icon_cached(name.to_string(), theme_str.map(|s| s.to_string())) {
+    if let Some(cached_path) =
+        icon_cache::get_icon_cached(name.to_string(), theme_str.map(|s| s.to_string()))
+    {
         // Load the image from the cached path
         return match cached_path.extension().and_then(|s| s.to_str()) {
             Some("png") => try_load_png(&cached_path),
@@ -298,8 +304,7 @@ fn get_battery_state(battery: &str) -> (u32, BatteryState) {
 
 fn get_battery_state_direct(battery: &str) -> (u32, BatteryState) {
     let status_path = format!("/sys/class/power_supply/{}/status", battery);
-    let status = fs::read_to_string(&status_path)
-        .unwrap_or_else(|_| "Unknown".to_string());
+    let status = fs::read_to_string(&status_path).unwrap_or_else(|_| "Unknown".to_string());
 
     #[cfg(target_arch = "x86_64")]
     let capacity = {
@@ -342,13 +347,16 @@ impl Button {
                 let (window_text, window_class) = match hyprland::get_active_window_info() {
                     Ok(info) => {
                         let title = info.get_text_by_button_title("title");
-                        println!("Hyprland plugin: Got window title: '{}', class: '{}'", title, info.class);
+                        println!(
+                            "Hyprland plugin: Got window title: '{}', class: '{}'",
+                            title, info.class
+                        );
                         (title, info.class.clone())
-                    },
+                    }
                     Err(e) => {
                         println!("Hyprland plugin error: {}", e);
                         ("Hyprland Starting...".to_string(), String::new())
-                    },
+                    }
                 };
 
                 // For Hyprland buttons, always try to show app icon if available
@@ -381,7 +389,9 @@ impl Button {
                 };
 
                 // Try cached app icon first
-                let final_icon = if let Some(path) = icon_cache::get_icon_cached(icon_name.clone(), cfg.theme.clone()) {
+                let final_icon = if let Some(path) =
+                    icon_cache::get_icon_cached(icon_name.clone(), cfg.theme.clone())
+                {
                     // Load from cached path
                     match path.extension().and_then(|s| s.to_str()) {
                         Some("png") => try_load_png(&path).ok(),
@@ -392,7 +402,8 @@ impl Button {
                     // Start async loading for next time
                     let _ = icon_cache::load_icon_async(icon_name, cfg.theme.clone());
                     None
-                }.unwrap_or_else(|| {
+                }
+                .unwrap_or_else(|| {
                     // Fallback chain using cached icons (these should be pre-loaded)
                     icon_cache::get_icon_cached("application-default-icon".to_string(), None)
                         .and_then(|path| match path.extension().and_then(|s| s.to_str()) {
@@ -452,7 +463,12 @@ impl Button {
             outline_color: None,
         }
     }
-    fn new_text_with_icon(text: String, icon_name: String, theme: Option<impl AsRef<str>>, action: ButtonAction) -> Button {
+    fn new_text_with_icon(
+        text: String,
+        icon_name: String,
+        theme: Option<impl AsRef<str>>,
+        action: ButtonAction,
+    ) -> Button {
         let icon = try_load_image(icon_name, theme).unwrap_or_else(|_| {
             // Fallback to a default icon if the specific app icon is not found
             try_load_image("application-default-icon", None::<&str>).unwrap_or_else(|_| {
@@ -477,7 +493,11 @@ impl Button {
             outline_color: None,
         }
     }
-    fn new_icon(path: impl AsRef<str>, theme: Option<impl AsRef<str>>, action: ButtonAction) -> Button {
+    fn new_icon(
+        path: impl AsRef<str>,
+        theme: Option<impl AsRef<str>>,
+        action: ButtonAction,
+    ) -> Button {
         let image = try_load_image(path, theme).expect("failed to load icon");
         Button {
             action,
@@ -494,20 +514,35 @@ impl Button {
         }
         panic!("failed to load icon");
     }
-    fn new_battery(action: ButtonAction, battery: String, battery_mode: String, theme: Option<impl AsRef<str>>) -> Button {
+    fn new_battery(
+        action: ButtonAction,
+        battery: String,
+        battery_mode: String,
+        theme: Option<impl AsRef<str>>,
+    ) -> Button {
         let bolt = Self::load_battery_image("bolt", theme.as_ref());
         let mut plain = Vec::new();
         let mut charging = Vec::new();
         for icon in [
-            "battery_0_bar", "battery_1_bar", "battery_2_bar", "battery_3_bar",
-            "battery_4_bar", "battery_5_bar", "battery_6_bar", "battery_full",
+            "battery_0_bar",
+            "battery_1_bar",
+            "battery_2_bar",
+            "battery_3_bar",
+            "battery_4_bar",
+            "battery_5_bar",
+            "battery_6_bar",
+            "battery_full",
         ] {
             plain.push(Self::load_battery_image(icon, theme.as_ref()));
         }
         for icon in [
-            "battery_charging_20", "battery_charging_30", "battery_charging_50",
-            "battery_charging_60", "battery_charging_80",
-            "battery_charging_90", "battery_charging_full",
+            "battery_charging_20",
+            "battery_charging_30",
+            "battery_charging_50",
+            "battery_charging_60",
+            "battery_charging_80",
+            "battery_charging_90",
+            "battery_charging_full",
         ] {
             charging.push(Self::load_battery_image(icon, theme.as_ref()));
         }
@@ -521,9 +556,15 @@ impl Button {
             action,
             active: false,
             changed: false,
-            image: ButtonImage::Battery(battery, battery_mode, BatteryImages {
-                plain, bolt, charging
-            }),
+            image: ButtonImage::Battery(
+                battery,
+                battery_mode,
+                BatteryImages {
+                    plain,
+                    bolt,
+                    charging,
+                },
+            ),
             show_outline: None,
             outline_color: None,
         }
@@ -543,7 +584,9 @@ impl Button {
             Err(e) => panic!("Invalid time format, consult the configuration file for examples of correct ones: {e:?}"),
         };
 
-        let locale = locale_str.and_then(|l| Locale::try_from(l).ok()).unwrap_or(Locale::POSIX);
+        let locale = locale_str
+            .and_then(|l| Locale::try_from(l).ok())
+            .unwrap_or(Locale::POSIX);
         Button {
             action,
             active: false,
@@ -602,7 +645,8 @@ impl Button {
                             }
                         }
 
-                        let final_text: String = trimmed.chars().take(left).collect::<String>() + ellipsis;
+                        let final_text: String =
+                            trimmed.chars().take(left).collect::<String>() + ellipsis;
                         let final_extents = c.text_extents(&final_text).unwrap();
                         (final_text, final_extents)
                     }
@@ -611,7 +655,8 @@ impl Button {
                 let total_width = icon_size + text_extents.width();
 
                 // Center the combined icon+text in the button
-                let start_x = button_left_edge + (button_width as f64 / 2.0 - total_width / 2.0).round();
+                let start_x =
+                    button_left_edge + (button_width as f64 / 2.0 - total_width / 2.0).round();
 
                 // Draw icon
                 let icon_x = start_x;
@@ -643,11 +688,14 @@ impl Button {
             }
             ButtonImage::Time(format, locale) => {
                 let current_time = Local::now();
-                let formatted_time = current_time.format_localized_with_items(format.iter(), *locale).to_string();
+                let formatted_time = current_time
+                    .format_localized_with_items(format.iter(), *locale)
+                    .to_string();
                 let time_extents = c.text_extents(&formatted_time).unwrap();
                 c.move_to(
-                    button_left_edge + (button_width as f64 / 2.0 - time_extents.width() / 2.0).round(),
-                    y_shift + (height as f64 / 2.0 + time_extents.height() / 2.0).round()
+                    button_left_edge
+                        + (button_width as f64 / 2.0 - time_extents.width() / 2.0).round(),
+                    y_shift + (height as f64 / 2.0 + time_extents.height() / 2.0).round(),
                 );
                 c.show_text(&formatted_time).unwrap();
             }
@@ -691,16 +739,20 @@ impl Button {
                         width += ICON_SIZE as f64;
                     }
                     text_offset = ICON_SIZE;
-                    let x =
-                        button_left_edge + (button_width as f64 / 2.0 - width / 2.0).round();
+                    let x = button_left_edge + (button_width as f64 / 2.0 - width / 2.0).round();
                     let y = y_shift + ((height as f64 - ICON_SIZE as f64) / 2.0).round();
 
-                    svg.render_document(c, &Rectangle::new(x, y, ICON_SIZE as f64, ICON_SIZE as f64))
-                        .unwrap();
+                    svg.render_document(
+                        c,
+                        &Rectangle::new(x, y, ICON_SIZE as f64, ICON_SIZE as f64),
+                    )
+                    .unwrap();
                 }
                 if battery_mode.should_draw_text() {
                     c.move_to(
-                        button_left_edge + (button_width as f64 / 2.0 - width / 2.0 + text_offset as f64).round(),
+                        button_left_edge
+                            + (button_width as f64 / 2.0 - width / 2.0 + text_offset as f64)
+                                .round(),
                         y_shift + (height as f64 / 2.0 + extents.height() / 2.0).round(),
                     );
                     c.show_text(&percent_str).unwrap();
@@ -990,7 +1042,15 @@ where
     );
 }
 
-fn update_layer_for_navigation(navigation_state: &NavigationState, config: &Config, layers: &mut [FunctionLayer; 2], active_layer: &mut usize, needs_complete_redraw: &mut bool, original_layers: &[FunctionLayer; 2], touches: &mut HashMap<u32, (usize, usize)>) {
+fn update_layer_for_navigation(
+    navigation_state: &NavigationState,
+    config: &Config,
+    layers: &mut [FunctionLayer; 2],
+    active_layer: &mut usize,
+    needs_complete_redraw: &mut bool,
+    original_layers: &[FunctionLayer; 2],
+    touches: &mut HashMap<u32, (usize, usize)>,
+) {
     if let Some(expandable_name) = &navigation_state.current_expandable {
         if let Some(expandable_buttons) = config.expandables.get(expandable_name) {
             // Create back button
@@ -1064,7 +1124,16 @@ fn clear_all_touches(layers: &mut [FunctionLayer; 2], touches: &mut HashMap<u32,
     touches.clear();
 }
 
-fn handle_hyprland_expand(hyprland_expand_name: &str, config: &Config, navigation_state: &mut NavigationState, layers: &mut [FunctionLayer; 2], active_layer: &mut usize, needs_complete_redraw: &mut bool, _original_layers: &[FunctionLayer; 2], touches: &mut HashMap<u32, (usize, usize)>) {
+fn handle_hyprland_expand(
+    hyprland_expand_name: &str,
+    config: &Config,
+    navigation_state: &mut NavigationState,
+    layers: &mut [FunctionLayer; 2],
+    active_layer: &mut usize,
+    needs_complete_redraw: &mut bool,
+    _original_layers: &[FunctionLayer; 2],
+    touches: &mut HashMap<u32, (usize, usize)>,
+) {
     // Get the active window information
     let active_window_info = match hyprland::get_active_window_info() {
         Ok(info) => info,
@@ -1074,9 +1143,9 @@ fn handle_hyprland_expand(hyprland_expand_name: &str, config: &Config, navigatio
     // Check if we have a Hyprland expandable configuration for this action
     if let Some(hyprland_configs) = config.hyprland_expandables.get(hyprland_expand_name) {
         // Find a matching configuration based on the active window class
-        let matching_config = hyprland_configs.iter().find(|config| {
-            config.class == active_window_info.class || config.class == "*"
-        });
+        let matching_config = hyprland_configs
+            .iter()
+            .find(|config| config.class == active_window_info.class || config.class == "*");
 
         if let Some(matched_config) = matching_config {
             // Create the button title based on configuration (for other buttons in the expand)
@@ -1096,7 +1165,7 @@ fn handle_hyprland_expand(hyprland_expand_name: &str, config: &Config, navigatio
                 show_button_outlines: Some(config.back_button_show_outlines),
                 button_outlines_color: config.back_button_outline_color.clone(),
                 show_app_icon_alongside_text: Some(true), // Show icon alongside text
-                app_icon: Some("back".to_string()), // Use back icon
+                app_icon: Some("back".to_string()),       // Use back icon
             };
 
             // Combine window button with expandable layer keys
@@ -1118,8 +1187,20 @@ fn handle_hyprland_expand(hyprland_expand_name: &str, config: &Config, navigatio
     // If no Hyprland expandable configuration found, ignore the button press
 }
 
-fn handle_button_action<F>(uinput: &mut UInputHandle<F>, action: &ButtonAction, config: &Config, active: bool, navigation_state: &mut NavigationState, layers: &mut [FunctionLayer; 2], active_layer: &mut usize, needs_complete_redraw: &mut bool, original_layers: &[FunctionLayer; 2], touches: &mut HashMap<u32, (usize, usize)>, pending_actions: &mut Vec<PendingAction>, button_index: Option<usize>)
-where
+fn handle_button_action<F>(
+    uinput: &mut UInputHandle<F>,
+    action: &ButtonAction,
+    config: &Config,
+    active: bool,
+    navigation_state: &mut NavigationState,
+    layers: &mut [FunctionLayer; 2],
+    active_layer: &mut usize,
+    needs_complete_redraw: &mut bool,
+    original_layers: &[FunctionLayer; 2],
+    touches: &mut HashMap<u32, (usize, usize)>,
+    pending_actions: &mut Vec<PendingAction>,
+    button_index: Option<usize>,
+) where
     F: AsRawFd,
 {
     match action {
@@ -1145,7 +1226,8 @@ where
                 if let Some(btn_idx) = button_index {
                     pending_actions.push(PendingAction {
                         action: action.clone(),
-                        execution_time: std::time::Instant::now() + std::time::Duration::from_millis(150),
+                        execution_time: std::time::Instant::now()
+                            + std::time::Duration::from_millis(150),
                         button_index: btn_idx,
                         layer_index: *active_layer,
                     });
@@ -1153,7 +1235,15 @@ where
                     // Fallback to immediate execution if no button index provided
                     if command_id == "Back" {
                         if navigation_state.pop_expandable() {
-                            update_layer_for_navigation(navigation_state, config, layers, active_layer, needs_complete_redraw, original_layers, touches);
+                            update_layer_for_navigation(
+                                navigation_state,
+                                config,
+                                layers,
+                                active_layer,
+                                needs_complete_redraw,
+                                original_layers,
+                                touches,
+                            );
                         }
                     } else {
                         execute_command(command_id, config);
@@ -1167,14 +1257,23 @@ where
                 if let Some(btn_idx) = button_index {
                     pending_actions.push(PendingAction {
                         action: action.clone(),
-                        execution_time: std::time::Instant::now() + std::time::Duration::from_millis(150),
+                        execution_time: std::time::Instant::now()
+                            + std::time::Duration::from_millis(150),
                         button_index: btn_idx,
                         layer_index: *active_layer,
                     });
                 } else {
                     // Fallback to immediate execution if no button index provided
                     navigation_state.push_expandable(expandable_name.clone());
-                    update_layer_for_navigation(navigation_state, config, layers, active_layer, needs_complete_redraw, original_layers, touches);
+                    update_layer_for_navigation(
+                        navigation_state,
+                        config,
+                        layers,
+                        active_layer,
+                        needs_complete_redraw,
+                        original_layers,
+                        touches,
+                    );
                 }
             }
         }
@@ -1184,13 +1283,23 @@ where
                 if let Some(btn_idx) = button_index {
                     pending_actions.push(PendingAction {
                         action: action.clone(),
-                        execution_time: std::time::Instant::now() + std::time::Duration::from_millis(150),
+                        execution_time: std::time::Instant::now()
+                            + std::time::Duration::from_millis(150),
                         button_index: btn_idx,
                         layer_index: *active_layer,
                     });
                 } else {
                     // Fallback to immediate execution if no button index provided
-                    handle_hyprland_expand(hyprland_expand_name, config, navigation_state, layers, active_layer, needs_complete_redraw, original_layers, touches);
+                    handle_hyprland_expand(
+                        hyprland_expand_name,
+                        config,
+                        navigation_state,
+                        layers,
+                        active_layer,
+                        needs_complete_redraw,
+                        original_layers,
+                        touches,
+                    );
                 }
             }
         }
@@ -1216,9 +1325,15 @@ fn execute_pending_actions<F>(
     for (index, pending_action) in pending_actions.iter().enumerate() {
         if now >= pending_action.execution_time {
             // Reset button visual state
-            if pending_action.layer_index < layers.len() && pending_action.button_index < layers[pending_action.layer_index].buttons.len() {
-                layers[pending_action.layer_index].buttons[pending_action.button_index].1.active = false;
-                layers[pending_action.layer_index].buttons[pending_action.button_index].1.changed = true;
+            if pending_action.layer_index < layers.len()
+                && pending_action.button_index < layers[pending_action.layer_index].buttons.len()
+            {
+                layers[pending_action.layer_index].buttons[pending_action.button_index]
+                    .1
+                    .active = false;
+                layers[pending_action.layer_index].buttons[pending_action.button_index]
+                    .1
+                    .changed = true;
             }
 
             // Execute the action
@@ -1226,7 +1341,15 @@ fn execute_pending_actions<F>(
                 ButtonAction::Command(command_id) => {
                     if command_id == "Back" {
                         if navigation_state.pop_expandable() {
-                            update_layer_for_navigation(navigation_state, config, layers, active_layer, needs_complete_redraw, original_layers, touches);
+                            update_layer_for_navigation(
+                                navigation_state,
+                                config,
+                                layers,
+                                active_layer,
+                                needs_complete_redraw,
+                                original_layers,
+                                touches,
+                            );
                         }
                     } else {
                         execute_command(command_id, config);
@@ -1234,10 +1357,27 @@ fn execute_pending_actions<F>(
                 }
                 ButtonAction::Expand(expandable_name) => {
                     navigation_state.push_expandable(expandable_name.clone());
-                    update_layer_for_navigation(navigation_state, config, layers, active_layer, needs_complete_redraw, original_layers, touches);
+                    update_layer_for_navigation(
+                        navigation_state,
+                        config,
+                        layers,
+                        active_layer,
+                        needs_complete_redraw,
+                        original_layers,
+                        touches,
+                    );
                 }
                 ButtonAction::HyprlandExpand(hyprland_expand_name) => {
-                    handle_hyprland_expand(hyprland_expand_name, config, navigation_state, layers, active_layer, needs_complete_redraw, original_layers, touches);
+                    handle_hyprland_expand(
+                        hyprland_expand_name,
+                        config,
+                        navigation_state,
+                        layers,
+                        active_layer,
+                        needs_complete_redraw,
+                        original_layers,
+                        touches,
+                    );
                 }
                 _ => {} // Other actions are handled immediately
             }
@@ -1251,160 +1391,184 @@ fn execute_pending_actions<F>(
         pending_actions.remove(index);
     }
 }
+fn spawn_user_graphical_command(
+    username: &str,
+    runtime_dir: &str,
+    enhanced_path: &str,
+    wayland_display: &str,
+    hypr_sig: Option<&str>,
+    command: &str,
+) -> std::io::Result<std::process::Child> {
+    let mut envs = vec![
+        format!("HOME=/home/{username}"),
+        format!("USER={username}"),
+        format!("LOGNAME={username}"),
+        "SHELL=/bin/bash".to_string(),
+        format!("PATH={enhanced_path}"),
+        format!("XDG_RUNTIME_DIR={runtime_dir}"),
+        format!("WAYLAND_DISPLAY={wayland_display}"),
+        format!("DBUS_SESSION_BUS_ADDRESS=unix:path={runtime_dir}/bus"),
+        "XDG_SESSION_TYPE=wayland".to_string(),
+        "DISPLAY=:0".to_string(),
+    ];
 
+    if let Some(sig) = hypr_sig {
+        envs.push(format!("HYPRLAND_INSTANCE_SIGNATURE={sig}"));
+    }
+
+    let mut uwsm_app = std::process::Command::new("sudo");
+    uwsm_app
+        .arg("-n")
+        .arg("-u")
+        .arg(username)
+        .arg("env")
+        .arg("-i");
+    for e in &envs {
+        uwsm_app.arg(e);
+    }
+    uwsm_app
+        .arg("uwsm-app")
+        .arg("--")
+        .arg("bash")
+        .arg("-lc")
+        .arg(command);
+
+    match uwsm_app.spawn() {
+        Ok(child) => return Ok(child),
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            eprintln!("uwsm-app launch failed: {e}");
+        }
+        Err(_) => {}
+    }
+
+    let mut uwsm = std::process::Command::new("sudo");
+    uwsm.arg("-n").arg("-u").arg(username).arg("env").arg("-i");
+    for e in &envs {
+        uwsm.arg(e);
+    }
+    uwsm.arg("uwsm")
+        .arg("app")
+        .arg("-t")
+        .arg("service")
+        .arg("--")
+        .arg("bash")
+        .arg("-lc")
+        .arg(command);
+
+    match uwsm.spawn() {
+        Ok(child) => return Ok(child),
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            eprintln!("uwsm app launch failed: {e}");
+        }
+        Err(_) => {}
+    }
+
+    let mut sdr = std::process::Command::new("sudo");
+    sdr.arg("-n").arg("-u").arg(username).arg("env").arg("-i");
+    for e in &envs {
+        sdr.arg(e);
+    }
+    sdr.arg("systemd-run")
+        .arg("--user")
+        .arg("--collect")
+        .arg("--same-dir")
+        .arg("--service-type=exec")
+        .arg("bash")
+        .arg("-lc")
+        .arg(command);
+
+    match sdr.spawn() {
+        Ok(child) => return Ok(child),
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            eprintln!("systemd-run --user launch failed: {e}");
+        }
+        Err(_) => {}
+    }
+
+    let mut fallback = std::process::Command::new("sudo");
+    fallback
+        .arg("-n")
+        .arg("-u")
+        .arg(username)
+        .arg("env")
+        .arg("-i");
+    for e in &envs {
+        fallback.arg(e);
+    }
+    fallback.arg("setsid").arg("bash").arg("-lc").arg(command);
+
+    fallback.spawn()
+}
 fn execute_command(command_id: &str, config: &Config) {
     if let Some(command) = config.commands.get(command_id) {
-        // Execute command in the background with cached user environment
         std::thread::spawn({
             let command = command.clone();
             let user_env = config.user_env.clone();
+
             move || {
                 println!("Executing command: {}", command);
 
-                // Use cached user environment for instant execution
                 if let Some(cached_env) = user_cache::get_cached_user_environment() {
-                    // Use user environment config if available, otherwise use cached detection
                     let wayland_display = if let Some(user_env) = &user_env {
                         user_env.wayland_display.clone()
                     } else {
                         cached_env.wayland_display.clone()
                     };
 
-                    // Attempt to discover Hyprland instance signature for external tools
                     let hypr_sig = {
-                        // Try /run/user/UID/hypr/*
                         let hypr_dir = format!("{}/hypr", cached_env.runtime_dir);
                         let mut found: Option<String> = None;
+
                         if let Ok(entries) = std::fs::read_dir(&hypr_dir) {
                             for entry in entries.flatten() {
                                 if let Ok(ft) = entry.file_type() {
                                     if ft.is_dir() {
                                         if let Some(name) = entry.file_name().to_str() {
-                                            if !name.is_empty() { found = Some(name.to_string()); break; }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        // Fallback: /tmp/hypr/*
-                        if found.is_none() {
-                            if let Ok(entries) = std::fs::read_dir("/tmp/hypr") {
-                                for entry in entries.flatten() {
-                                    if let Ok(ft) = entry.file_type() {
-                                        if ft.is_dir() {
-                                            if let Some(name) = entry.file_name().to_str() {
-                                                if !name.is_empty() { found = Some(name.to_string()); break; }
+                                            if !name.is_empty() {
+                                                found = Some(name.to_string());
+                                                break;
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-                        found
-                    };
 
-                    // Build command with environment variables embedded
-                    let env_command = if let Some(sig) = &hypr_sig {
-                        format!(
-                            "export PATH='{}' XDG_RUNTIME_DIR='{}' WAYLAND_DISPLAY='{}' DISPLAY=':0' DBUS_SESSION_BUS_ADDRESS='unix:path={}/bus' HYPRLAND_INSTANCE_SIGNATURE='{}' XDG_SESSION_TYPE='wayland'; {}",
-                            cached_env.enhanced_path,
-                            cached_env.runtime_dir,
-                            wayland_display,
-                            cached_env.runtime_dir,
-                            sig,
-                            command
-                        )
-                    } else {
-                        format!(
-                            "export PATH='{}' XDG_RUNTIME_DIR='{}' WAYLAND_DISPLAY='{}' DISPLAY=':0' DBUS_SESSION_BUS_ADDRESS='unix:path={}/bus' XDG_SESSION_TYPE='wayland'; {}",
-                            cached_env.enhanced_path,
-                            cached_env.runtime_dir,
-                            wayland_display,
-                            cached_env.runtime_dir,
-                            command
-                        )
-                    };
-
-                    // Preferred: launch into the user's systemd --user session so the process
-                    // is outside the system service cgroup/sandbox and inherits the right session
-                    // context. This avoids EPERM/Operation not permitted when TUIs spawn children.
-                    let mut launched = false;
-                    // Best effort: convey session-critical env to systemd-run itself via `env`
-                    // to ensure it can talk to the user manager and compositor.
-                    let mut try_systemd_run = std::process::Command::new("sudo");
-                    // Build argument list dynamically to include HYPRLAND_INSTANCE_SIGNATURE only when known
-                    {
-                        let mut args: Vec<String> = vec![
-                            "-u".into(),
-                            cached_env.username.clone(),
-                            "env".into(),
-                            format!("XDG_RUNTIME_DIR={}", cached_env.runtime_dir),
-                            format!("DBUS_SESSION_BUS_ADDRESS=unix:path={}/bus", cached_env.runtime_dir),
-                            format!("WAYLAND_DISPLAY={}", wayland_display),
-                            "DISPLAY=:0".into(),
-                            format!("PATH={}", cached_env.enhanced_path),
-                        ];
-                        if let Some(sig) = &hypr_sig {
-                            args.push(format!("HYPRLAND_INSTANCE_SIGNATURE={}", sig));
-                        }
-                        args.push("XDG_SESSION_TYPE=wayland".into());
-                        args.push("systemd-run".into());
-                        args.push("--user".into());
-                        args.push("--quiet".into());
-                        args.push("--collect".into());
-                        args.push("--same-dir".into());
-                        args.push("sh".into());
-                        args.push("-lc".into());
-                        args.push(env_command.clone());
-                        for a in args { try_systemd_run.arg(a); }
-                    }
-                    match try_systemd_run.spawn() {
-                        Ok(_) => {
-                            launched = true;
-                        }
-                        Err(e) => {
-                            eprintln!("systemd-run --user failed (sudo path): {}", e);
-                        }
-                    }
-
-                    if !launched {
-                        // Fallback: runuser login shell
-                        let runuser_candidates = [
-                            "/usr/bin/runuser",
-                            "/usr/sbin/runuser",
-                            "runuser",
-                        ];
-                        for bin in &runuser_candidates {
-                            let mut cmd = std::process::Command::new(bin);
-                            cmd.args(["-l", &cached_env.username, "-c", &env_command]);
-                            match cmd.spawn() {
-                                Ok(_) => {
-                                    launched = true;
-                                    break;
-                                }
-                                Err(e) => {
-                                    if e.kind() != std::io::ErrorKind::NotFound {
-                                        eprintln!("runuser variant '{}' failed: {}", bin, e);
+                        if found.is_none() {
+                            if let Ok(entries) = std::fs::read_dir("/tmp/hypr") {
+                                for entry in entries.flatten() {
+                                    if let Ok(ft) = entry.file_type() {
+                                        if ft.is_dir() {
+                                            if let Some(name) = entry.file_name().to_str() {
+                                                if !name.is_empty() {
+                                                    found = Some(name.to_string());
+                                                    break;
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    if !launched {
-                        // Last fallback: sudo -u USER sh -lc "..."
-                        let mut sudo = std::process::Command::new("sudo");
-                        sudo.args(["-u", &cached_env.username, "sh", "-lc", &env_command]);
-                        if let Err(e) = sudo.spawn() {
-                            eprintln!(
-                                "Failed to execute command '{}' as user '{}' via sudo: {}",
-                                command, cached_env.username, e
-                            );
-                            fallback_execution(&command);
-                        }
+                        found
+                    };
+
+                    if let Err(e) = spawn_user_graphical_command(
+                        &cached_env.username,
+                        &cached_env.runtime_dir,
+                        &cached_env.enhanced_path,
+                        &wayland_display,
+                        hypr_sig.as_deref(),
+                        &command,
+                    ) {
+                        eprintln!(
+                            "Failed to launch command '{}' in user graphical session: {}",
+                            command, e
+                        );
+                        fallback_execution(&command);
                     }
                 } else {
-                    // Fallback if cache is not available
                     eprintln!("User environment cache not available, using fallback execution");
                     fallback_execution(&command);
                 }
@@ -1415,6 +1579,121 @@ fn execute_command(command_id: &str, config: &Config) {
     }
 }
 
+fn touchbar_nodes_ready() -> bool {
+    std::path::Path::new("/dev/tiny_dfr_display").exists()
+        && std::path::Path::new("/dev/tiny_dfr_backlight").exists()
+        && std::path::Path::new("/dev/tiny_dfr_display_backlight").exists()
+}
+
+fn build_libinput_pair() -> Result<(Libinput, Libinput)> {
+    let mut input_tb = Libinput::new_with_udev(Interface);
+    let mut input_main = Libinput::new_with_udev(Interface);
+
+    input_tb
+        .udev_assign_seat("seat-touchbar")
+        .map_err(|_| anyhow!("failed to assign seat-touchbar"))?;
+    input_main
+        .udev_assign_seat("seat0")
+        .map_err(|_| anyhow!("failed to assign seat0"))?;
+
+    Ok((input_tb, input_main))
+}
+
+fn build_epoll(
+    input_main: &Libinput,
+    input_tb: &Libinput,
+    cfg_mgr: &ConfigManager,
+    udev_monitor: &impl AsFd,
+) -> Result<Epoll> {
+    let epoll = Epoll::new(EpollCreateFlags::empty())
+        .map_err(|e| anyhow!("failed to create epoll: {e}"))?;
+
+    epoll
+        .add(input_main.as_fd(), EpollEvent::new(EpollFlags::EPOLLIN, 0))
+        .map_err(|e| anyhow!("failed to add input_main to epoll: {e}"))?;
+    epoll
+        .add(input_tb.as_fd(), EpollEvent::new(EpollFlags::EPOLLIN, 1))
+        .map_err(|e| anyhow!("failed to add input_tb to epoll: {e}"))?;
+    epoll
+        .add(cfg_mgr.fd(), EpollEvent::new(EpollFlags::EPOLLIN, 2))
+        .map_err(|e| anyhow!("failed to add cfg_mgr to epoll: {e}"))?;
+    epoll
+        .add(udev_monitor, EpollEvent::new(EpollFlags::EPOLLIN, 3))
+        .map_err(|e| anyhow!("failed to add udev_monitor to epoll: {e}"))?;
+
+    Ok(epoll)
+}
+
+fn invalidate_touchbar_runtime(
+    digitizer: &mut Option<InputDevice>,
+    touches: &mut HashMap<u32, (usize, usize)>,
+    pending_actions: &mut Vec<PendingAction>,
+    layers: &mut [FunctionLayer; 2],
+) {
+    *digitizer = None;
+    clear_all_touches(layers, touches);
+    pending_actions.clear();
+}
+
+fn try_reinitialize_touchbar_runtime(
+    drm: &mut DrmBackend,
+    surface: &mut ImageSurface,
+    backlight: &mut BacklightManager,
+    input_tb: &mut Libinput,
+    input_main: &mut Libinput,
+    digitizer: &mut Option<InputDevice>,
+    epoll: &mut Epoll,
+    cfg_mgr: &ConfigManager,
+    udev_monitor: &impl AsFd,
+    width: &mut u16,
+    height: &mut u16,
+    db_width: &mut u32,
+    db_height: &mut u32,
+) -> Result<()> {
+    if !touchbar_nodes_ready() {
+        return Err(anyhow!("touchbar device nodes are not ready yet"));
+    }
+
+    let new_drm = DrmBackend::open_card().context("failed to reopen DRM card")?;
+    let (new_height, new_width) = new_drm.mode().size();
+    let (new_db_width, new_db_height) = new_drm
+        .fb_info()
+        .context("failed to query framebuffer info after resume")?
+        .size();
+
+    let new_surface =
+        ImageSurface::create(Format::ARgb32, new_db_width as i32, new_db_height as i32)
+            .context("failed to recreate image surface after resume")?;
+
+    let new_backlight = BacklightManager::new();
+    let (new_input_tb, new_input_main) = build_libinput_pair()?;
+    let new_epoll = build_epoll(&new_input_main, &new_input_tb, cfg_mgr, udev_monitor)?;
+
+    *drm = new_drm;
+    *surface = new_surface;
+    *backlight = new_backlight;
+    *input_tb = new_input_tb;
+    *input_main = new_input_main;
+    *digitizer = None;
+    *epoll = new_epoll;
+    *width = new_width;
+    *height = new_height;
+    *db_width = new_db_width;
+    *db_height = new_db_height;
+
+    Ok(())
+}
+fn wait_for_touchbar_nodes(timeout: std::time::Duration) -> bool {
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
+        if touchbar_nodes_ready() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(150));
+    }
+    false
+}
+
 fn fallback_execution(command: &str) {
     let mut cmd = std::process::Command::new("sh");
     cmd.arg("-c").arg(command);
@@ -1423,7 +1702,6 @@ fn fallback_execution(command: &str) {
         eprintln!("Hint: If the command launches a terminal application (e.g. btop, htop, nmtui), wrap it with your terminal, e.g. 'alacritty -e btop' or 'footclient -e btop'.");
     }
 }
-
 
 fn expand_user_path(username: &str) -> Result<String, std::io::Error> {
     use std::fs;
@@ -1466,7 +1744,6 @@ fn expand_user_path(username: &str) -> Result<String, std::io::Error> {
     Ok(paths.join(":"))
 }
 
-
 fn main() {
     let mut drm = DrmBackend::open_card().unwrap();
     let (height, width) = drm.mode().size();
@@ -1494,28 +1771,28 @@ fn main() {
 }
 
 fn real_main(drm: &mut DrmBackend) {
-    let (height, width) = drm.mode().size();
-    let (db_width, db_height) = drm.fb_info().unwrap().size();
+    let (mut height, mut width) = drm.mode().size();
+    let (mut db_width, mut db_height) = drm.fb_info().unwrap().size();
     let mut uinput = UInputHandle::new(OpenOptions::new().write(true).open("/dev/uinput").unwrap());
     let mut backlight = BacklightManager::new();
     let mut last_redraw_minute = Local::now().minute();
     let mut last_battery_update_minute = Local::now().minute();
     let mut cfg_mgr = ConfigManager::new();
     let (mut cfg, mut layers) = cfg_mgr.load_config(width);
-    
+
     // Initialize keyboard backlight BEFORE dropping privileges
-    let mut kbd_backlight = KeyboardBacklightManager::new_with_config(
-        cfg.keyboard_brightness_step
-    );
-    
+    let mut kbd_backlight = KeyboardBacklightManager::new_with_config(cfg.keyboard_brightness_step);
+
     // Log keyboard backlight availability
     if kbd_backlight.is_available() {
-        println!("Keyboard backlight control enabled - Max brightness: {}", 
-                 kbd_backlight.max_brightness());
+        println!(
+            "Keyboard backlight control enabled - Max brightness: {}",
+            kbd_backlight.max_brightness()
+        );
     } else {
         println!("Keyboard backlight control disabled - falling back to key events");
     }
-    
+
     let mut pixel_shift = PixelShiftManager::new();
 
     // Initialize performance optimizations
@@ -1550,30 +1827,14 @@ fn real_main(drm: &mut DrmBackend) {
 
     // Start background icon preloader (after initial setup)
     icon_cache::start_background_preloader();
-
-    let mut input_tb = Libinput::new_with_udev(Interface);
-    let mut input_main = Libinput::new_with_udev(Interface);
-    input_tb.udev_assign_seat("seat-touchbar").unwrap();
-    input_main.udev_assign_seat("seat0").unwrap();
+    let (mut input_tb, mut input_main) = build_libinput_pair().unwrap();
     let udev_monitor = MonitorBuilder::new()
         .unwrap()
         .match_subsystem("power_supply")
         .unwrap()
         .listen()
         .unwrap();
-    let epoll = Epoll::new(EpollCreateFlags::empty()).unwrap();
-    epoll
-        .add(input_main.as_fd(), EpollEvent::new(EpollFlags::EPOLLIN, 0))
-        .unwrap();
-    epoll
-        .add(input_tb.as_fd(), EpollEvent::new(EpollFlags::EPOLLIN, 1))
-        .unwrap();
-    epoll
-        .add(cfg_mgr.fd(), EpollEvent::new(EpollFlags::EPOLLIN, 2))
-        .unwrap();
-    epoll
-        .add(&udev_monitor, EpollEvent::new(EpollFlags::EPOLLIN, 3))
-        .unwrap();
+    let mut epoll = build_epoll(&input_main, &input_tb, &cfg_mgr, &udev_monitor).unwrap();
     uinput.set_evbit(EventKind::Key).unwrap();
     for layer in &layers {
         for button in &layer.buttons {
@@ -1648,6 +1909,7 @@ fn real_main(drm: &mut DrmBackend) {
     let mut digitizer: Option<InputDevice> = None;
     let mut touches: HashMap<u32, (usize, usize)> = HashMap::new();
     let mut pending_actions: Vec<PendingAction> = Vec::new();
+    let mut touchbar_runtime_invalidated = false;
     loop {
         if cfg_mgr.update_config(&mut cfg, &mut layers, width) {
             active_layer = 0;
@@ -1660,7 +1922,9 @@ fn real_main(drm: &mut DrmBackend) {
         }
 
         // Check for timeout and return to main layer (only if we're actually in an expandable)
-        if navigation_state.current_expandable.is_some() && navigation_state.should_timeout(cfg.expandable_timeout_seconds) {
+        if navigation_state.current_expandable.is_some()
+            && navigation_state.should_timeout(cfg.expandable_timeout_seconds)
+        {
             navigation_state.reset_to_main();
             layers[0] = original_layers[0].clone();
             layers[1] = original_layers[1].clone();
@@ -1718,12 +1982,64 @@ fn real_main(drm: &mut DrmBackend) {
                 &mut touches,
             );
         }
+        if !touchbar_nodes_ready() {
+            if !touchbar_runtime_invalidated {
+                eprintln!("Touch Bar nodes disappeared; invalidating runtime");
+                invalidate_touchbar_runtime(
+                    &mut digitizer,
+                    &mut touches,
+                    &mut pending_actions,
+                    &mut layers,
+                );
+            }
+            touchbar_runtime_invalidated = true;
+            next_timeout_ms = min(next_timeout_ms, 150);
+        } else if touchbar_runtime_invalidated {
+            if wait_for_touchbar_nodes(std::time::Duration::from_millis(300)) {
+                match try_reinitialize_touchbar_runtime(
+                    drm,
+                    &mut surface,
+                    &mut backlight,
+                    &mut input_tb,
+                    &mut input_main,
+                    &mut digitizer,
+                    &mut epoll,
+                    &cfg_mgr,
+                    &udev_monitor,
+                    &mut width,
+                    &mut height,
+                    &mut db_width,
+                    &mut db_height,
+                ) {
+                    Ok(()) => {
+                        eprintln!("Touch Bar runtime reinitialized");
 
+                        // Proactively attempt Hyprland reconnection after resume
+                        eprintln!("Attempting Hyprland reconnection after resume...");
+                        match hyprland::get_active_window_info() {
+                            Ok(_) => eprintln!("Hyprland reconnected successfully"),
+                            Err(e) => eprintln!("Hyprland not yet available: {}", e),
+                        }
+
+                        touchbar_runtime_invalidated = false;
+                        needs_complete_redraw = true;
+                        continue;
+                    }
+                    Err(e) => {
+                        eprintln!("Touch Bar reinit failed: {e:#}");
+                        next_timeout_ms = min(next_timeout_ms, 500);
+                    }
+                }
+            }
+        }
         // Calculate next timeout for pending actions
         if !pending_actions.is_empty() {
             let now = std::time::Instant::now();
             for pending_action in &pending_actions {
-                let remaining_ms = pending_action.execution_time.saturating_duration_since(now).as_millis() as i32;
+                let remaining_ms = pending_action
+                    .execution_time
+                    .saturating_duration_since(now)
+                    .as_millis() as i32;
                 if remaining_ms > 0 {
                     next_timeout_ms = min(next_timeout_ms, remaining_ms);
                 }
@@ -1761,7 +2077,7 @@ fn real_main(drm: &mut DrmBackend) {
                 for button in &mut layers[active_layer].buttons {
                     // Check if this is a hyprland plugin button and update its content
                     match &button.1.action {
-                        config::ButtonAction::HyprlandExpand(expand_name) => {
+                        config::ButtonAction::HyprlandExpand(_expand_name) => {
                             // Check if this is an icon-only button (plugin-hyprland-icon) or text button (plugin-hyprland)
                             match &button.1.image {
                                 ButtonImage::Svg(_) | ButtonImage::Bitmap(_) => {
@@ -1769,33 +2085,56 @@ fn real_main(drm: &mut DrmBackend) {
                                     let app_icon_name = window_info.get_app_icon_name();
 
                                     // Use efficient cache-based loading
-                                    let new_icon = if let Some(path) = icon_cache::get_icon_cached(app_icon_name.clone(), None) {
+                                    let new_icon = if let Some(path) =
+                                        icon_cache::get_icon_cached(app_icon_name.clone(), None)
+                                    {
                                         match path.extension().and_then(|s| s.to_str()) {
                                             Some("png") => try_load_png(&path).ok(),
-                                            Some("svg") => try_load_svg(path.to_str().unwrap_or("")).ok(),
+                                            Some("svg") => {
+                                                try_load_svg(path.to_str().unwrap_or("")).ok()
+                                            }
                                             _ => None,
                                         }
                                     } else {
                                         // Start async loading for next time
                                         let _ = icon_cache::load_icon_async(app_icon_name, None);
                                         None
-                                    }.unwrap_or_else(|| {
+                                    }
+                                    .unwrap_or_else(|| {
                                         // Use pre-loaded fallbacks
-                                        icon_cache::get_icon_cached("application-default-icon".to_string(), None)
-                                            .and_then(|path| match path.extension().and_then(|s| s.to_str()) {
+                                        icon_cache::get_icon_cached(
+                                            "application-default-icon".to_string(),
+                                            None,
+                                        )
+                                        .and_then(|path| {
+                                            match path.extension().and_then(|s| s.to_str()) {
                                                 Some("png") => try_load_png(&path).ok(),
-                                                Some("svg") => try_load_svg(path.to_str().unwrap_or("")).ok(),
+                                                Some("svg") => {
+                                                    try_load_svg(path.to_str().unwrap_or("")).ok()
+                                                }
                                                 _ => None,
-                                            })
-                                            .or_else(|| {
-                                                icon_cache::get_icon_cached("plugin-hyprland".to_string(), None)
-                                                    .and_then(|path| match path.extension().and_then(|s| s.to_str()) {
-                                                        Some("png") => try_load_png(&path).ok(),
-                                                        Some("svg") => try_load_svg(path.to_str().unwrap_or("")).ok(),
-                                                        _ => None,
-                                                    })
-                                            })
-                                            .unwrap_or_else(|| ButtonImage::Text("🔗".to_string()))
+                                            }
+                                        })
+                                        .or_else(|| {
+                                            icon_cache::get_icon_cached(
+                                                "plugin-hyprland".to_string(),
+                                                None,
+                                            )
+                                            .and_then(
+                                                |path| match path
+                                                    .extension()
+                                                    .and_then(|s| s.to_str())
+                                                {
+                                                    Some("png") => try_load_png(&path).ok(),
+                                                    Some("svg") => {
+                                                        try_load_svg(path.to_str().unwrap_or(""))
+                                                            .ok()
+                                                    }
+                                                    _ => None,
+                                                },
+                                            )
+                                        })
+                                        .unwrap_or_else(|| ButtonImage::Text("🔗".to_string()))
                                     });
 
                                     button.1.image = new_icon;
@@ -1804,27 +2143,38 @@ fn real_main(drm: &mut DrmBackend) {
                                 _ => {
                                     // This is a Text plugin-hyprland button - show with app icon and text using cache
                                     let app_icon_name = window_info.get_app_icon_name();
-                                    let window_title = window_info.get_text_by_button_title("title");
+                                    let window_title =
+                                        window_info.get_text_by_button_title("title");
 
                                     // Use cache-based approach for consistent performance
-                                    if let Some(path) = icon_cache::get_icon_cached(app_icon_name.clone(), None) {
+                                    if let Some(path) =
+                                        icon_cache::get_icon_cached(app_icon_name.clone(), None)
+                                    {
                                         // Load icon from cached path
-                                        if let Ok(icon) = match path.extension().and_then(|s| s.to_str()) {
-                                            Some("png") => try_load_png(&path),
-                                            Some("svg") => try_load_svg(path.to_str().unwrap_or("")),
-                                            _ => {
-                                                // Start async loading for next time
-                                                let _ = icon_cache::load_icon_async(app_icon_name, None);
-                                                button.1.image = ButtonImage::Text(window_title);
-                                                button.1.changed = true;
-                                                continue;
-                                            },
-                                        } {
+                                        if let Ok(icon) =
+                                            match path.extension().and_then(|s| s.to_str()) {
+                                                Some("png") => try_load_png(&path),
+                                                Some("svg") => {
+                                                    try_load_svg(path.to_str().unwrap_or(""))
+                                                }
+                                                _ => {
+                                                    // Start async loading for next time
+                                                    let _ = icon_cache::load_icon_async(
+                                                        app_icon_name,
+                                                        None,
+                                                    );
+                                                    button.1.image =
+                                                        ButtonImage::Text(window_title);
+                                                    button.1.changed = true;
+                                                    continue;
+                                                }
+                                            }
+                                        {
                                             if let ButtonImage::Svg(icon_handle) = icon {
                                                 // Show with app icon and text
                                                 button.1.image = ButtonImage::TextWithIcon(
                                                     format!(" {}", window_title),
-                                                    icon_handle
+                                                    icon_handle,
                                                 );
                                                 button.1.changed = true;
                                             } else {
@@ -1842,26 +2192,38 @@ fn real_main(drm: &mut DrmBackend) {
                                         let _ = icon_cache::load_icon_async(app_icon_name, None);
 
                                         // Try pre-loaded fallback icons for text+icon mode
-                                        if let Some(fallback_path) = icon_cache::get_icon_cached("application-default-icon".to_string(), None) {
-                                            if let Ok(fallback_icon) = match fallback_path.extension().and_then(|s| s.to_str()) {
+                                        if let Some(fallback_path) = icon_cache::get_icon_cached(
+                                            "application-default-icon".to_string(),
+                                            None,
+                                        ) {
+                                            if let Ok(fallback_icon) = match fallback_path
+                                                .extension()
+                                                .and_then(|s| s.to_str())
+                                            {
                                                 Some("png") => try_load_png(&fallback_path),
-                                                Some("svg") => try_load_svg(fallback_path.to_str().unwrap_or("")),
+                                                Some("svg") => try_load_svg(
+                                                    fallback_path.to_str().unwrap_or(""),
+                                                ),
                                                 _ => {
-                                                    button.1.image = ButtonImage::Text(window_title);
+                                                    button.1.image =
+                                                        ButtonImage::Text(window_title);
                                                     button.1.changed = true;
                                                     continue;
-                                                },
+                                                }
                                             } {
-                                                if let ButtonImage::Svg(fallback_handle) = fallback_icon {
+                                                if let ButtonImage::Svg(fallback_handle) =
+                                                    fallback_icon
+                                                {
                                                     // Use fallback icon with text
                                                     button.1.image = ButtonImage::TextWithIcon(
                                                         format!(" {}", window_title),
-                                                        fallback_handle
+                                                        fallback_handle,
                                                     );
                                                     button.1.changed = true;
                                                 } else {
                                                     // Fallback to text only
-                                                    button.1.image = ButtonImage::Text(window_title);
+                                                    button.1.image =
+                                                        ButtonImage::Text(window_title);
                                                     button.1.changed = true;
                                                 }
                                             } else {
@@ -1883,14 +2245,26 @@ fn real_main(drm: &mut DrmBackend) {
                             // We need to identify Icon plugin-hyprland buttons somehow
                             // One way is to check if this is a button that shows app-specific icons
                             match &button.1.image {
-                                ButtonImage::Text(text) if text.contains("Alacritty") || text.contains("code") || text.contains("Visual Studio") => {
+                                ButtonImage::Text(text)
+                                    if text.contains("Alacritty")
+                                        || text.contains("code")
+                                        || text.contains("Visual Studio") =>
+                                {
                                     // This is a Text plugin-hyprland button
-                                    button.1.image = ButtonImage::Text(window_info.get_text_by_button_title("title"));
+                                    button.1.image = ButtonImage::Text(
+                                        window_info.get_text_by_button_title("title"),
+                                    );
                                     button.1.changed = true;
                                 }
-                                ButtonImage::TextWithIcon(text, _) if text.contains("Alacritty") || text.contains("code") || text.contains("Visual Studio") => {
+                                ButtonImage::TextWithIcon(text, _)
+                                    if text.contains("Alacritty")
+                                        || text.contains("code")
+                                        || text.contains("Visual Studio") =>
+                                {
                                     // For non-Hyprland expand buttons, keep as text only
-                                    button.1.image = ButtonImage::Text(window_info.get_text_by_button_title("title"));
+                                    button.1.image = ButtonImage::Text(
+                                        window_info.get_text_by_button_title("title"),
+                                    );
                                     button.1.changed = true;
                                 }
                                 _ => {}
@@ -1901,12 +2275,15 @@ fn real_main(drm: &mut DrmBackend) {
             }
         }
 
-        if needs_complete_redraw || layers[active_layer].buttons.iter().any(|b| b.1.changed) {
+        if !touchbar_runtime_invalidated
+            && (needs_complete_redraw || layers[active_layer].buttons.iter().any(|b| b.1.changed))
+        {
             let shift = if cfg.enable_pixel_shift {
                 pixel_shift.get()
             } else {
                 (0.0, 0.0)
             };
+
             let clips = layers[active_layer].draw(
                 &cfg,
                 width as i32,
@@ -1915,9 +2292,53 @@ fn real_main(drm: &mut DrmBackend) {
                 shift,
                 needs_complete_redraw,
             );
-            let data = surface.data().unwrap();
-            drm.map().unwrap().as_mut()[..data.len()].copy_from_slice(&data);
-            drm.dirty(&clips).unwrap();
+
+            let data = match surface.data() {
+                Ok(data) => data,
+                Err(e) => {
+                    eprintln!("surface.data failed during redraw: {e}");
+                    touchbar_runtime_invalidated = true;
+                    invalidate_touchbar_runtime(
+                        &mut digitizer,
+                        &mut touches,
+                        &mut pending_actions,
+                        &mut layers,
+                    );
+                    continue;
+                }
+            };
+
+            {
+                let mut map = match drm.map() {
+                    Ok(map) => map,
+                    Err(e) => {
+                        eprintln!("drm.map failed during redraw: {e}");
+                        touchbar_runtime_invalidated = true;
+                        invalidate_touchbar_runtime(
+                            &mut digitizer,
+                            &mut touches,
+                            &mut pending_actions,
+                            &mut layers,
+                        );
+                        continue;
+                    }
+                };
+
+                map.as_mut()[..data.len()].copy_from_slice(&data);
+            }
+
+            if let Err(e) = drm.dirty(&clips) {
+                eprintln!("drm.dirty failed during redraw: {e}");
+                touchbar_runtime_invalidated = true;
+                invalidate_touchbar_runtime(
+                    &mut digitizer,
+                    &mut touches,
+                    &mut pending_actions,
+                    &mut layers,
+                );
+                continue;
+            }
+
             needs_complete_redraw = false;
         }
 
@@ -1931,8 +2352,23 @@ fn real_main(drm: &mut DrmBackend) {
 
         _ = udev_monitor.iter().last();
 
-        input_tb.dispatch().unwrap();
-        input_main.dispatch().unwrap();
+        if let Err(e) = input_main.dispatch() {
+            eprintln!("input_main.dispatch failed: {e}");
+        }
+
+        if !touchbar_runtime_invalidated {
+            if let Err(e) = input_tb.dispatch() {
+                eprintln!("input_tb.dispatch failed: {e}");
+                touchbar_runtime_invalidated = true;
+                invalidate_touchbar_runtime(
+                    &mut digitizer,
+                    &mut touches,
+                    &mut pending_actions,
+                    &mut layers,
+                );
+                continue;
+            }
+        }
         for event in &mut input_tb.clone().chain(input_main.clone()) {
             backlight.process_event(&event);
             match event {
@@ -1940,12 +2376,19 @@ fn real_main(drm: &mut DrmBackend) {
                     let dev = evt.device();
                     if dev.name().contains(" Touch Bar") {
                         digitizer = Some(dev);
+                        touchbar_runtime_invalidated = true;
                     }
                 }
                 Event::Device(DeviceEvent::Removed(evt)) => {
                     let dev = evt.device();
                     if dev.name().contains(" Touch Bar") {
-                        digitizer = None;
+                        touchbar_runtime_invalidated = true;
+                        invalidate_touchbar_runtime(
+                            &mut digitizer,
+                            &mut touches,
+                            &mut pending_actions,
+                            &mut layers,
+                        );
                     }
                 }
                 Event::Keyboard(KeyboardEvent::Key(key)) => {
@@ -1970,25 +2413,26 @@ fn real_main(drm: &mut DrmBackend) {
                             let y = dn.y_transformed(height as u32);
                             if let Some(btn) = layers[active_layer].hit(width, height, x, y, None) {
                                 touches.insert(dn.seat_slot(), (active_layer, btn));
-                                
+
                                 // Get the button action before borrowing layers mutably
                                 let button_action = &layers[active_layer].buttons[btn].1.action;
-                                
+
                                 // Handle keyboard backlight actions directly
-                                let handled_by_keyboard_backlight = if cfg.keyboard_brightness_enabled {
-                                    match button_action {
-                                        ButtonAction::Key(Key::IllumUp) => {
-                                            kbd_backlight.increase_brightness()
+                                let handled_by_keyboard_backlight =
+                                    if cfg.keyboard_brightness_enabled {
+                                        match button_action {
+                                            ButtonAction::Key(Key::IllumUp) => {
+                                                kbd_backlight.increase_brightness()
+                                            }
+                                            ButtonAction::Key(Key::IllumDown) => {
+                                                kbd_backlight.decrease_brightness()
+                                            }
+                                            _ => false,
                                         }
-                                        ButtonAction::Key(Key::IllumDown) => {
-                                            kbd_backlight.decrease_brightness()
-                                        }
-                                        _ => false
-                                    }
-                                } else {
-                                    false
-                                };
-                                
+                                    } else {
+                                        false
+                                    };
+
                                 // Only send key event if we didn't handle it with keyboard backlight
                                 if !handled_by_keyboard_backlight {
                                     // Extract the button action to avoid borrowing conflict
@@ -1997,7 +2441,20 @@ fn real_main(drm: &mut DrmBackend) {
                                     if old_active != true {
                                         layers[active_layer].buttons[btn].1.active = true;
                                         layers[active_layer].buttons[btn].1.changed = true;
-                                        handle_button_action(&mut uinput, &action, &cfg, true, &mut navigation_state, &mut layers, &mut active_layer, &mut needs_complete_redraw, &original_layers, &mut touches, &mut pending_actions, Some(btn));
+                                        handle_button_action(
+                                            &mut uinput,
+                                            &action,
+                                            &cfg,
+                                            true,
+                                            &mut navigation_state,
+                                            &mut layers,
+                                            &mut active_layer,
+                                            &mut needs_complete_redraw,
+                                            &original_layers,
+                                            &mut touches,
+                                            &mut pending_actions,
+                                            Some(btn),
+                                        );
                                     }
                                 } else {
                                     // Show visual feedback for keyboard backlight buttons (without key event)
@@ -2020,12 +2477,16 @@ fn real_main(drm: &mut DrmBackend) {
                             let hit = layers[active_layer]
                                 .hit(width, height, x, y, Some(btn))
                                 .is_some();
-                            
+
                             // Check if this is a keyboard backlight button
                             let button_action = &layers[layer].buttons[btn].1.action;
-                            let is_kbd_backlight_button = cfg.keyboard_brightness_enabled &&
-                                matches!(button_action, ButtonAction::Key(Key::IllumUp) | ButtonAction::Key(Key::IllumDown));
-                            
+                            let is_kbd_backlight_button = cfg.keyboard_brightness_enabled
+                                && matches!(
+                                    button_action,
+                                    ButtonAction::Key(Key::IllumUp)
+                                        | ButtonAction::Key(Key::IllumDown)
+                                );
+
                             if !is_kbd_backlight_button {
                                 // Extract the button action to avoid borrowing conflict
                                 let action = layers[layer].buttons[btn].1.action.clone();
@@ -2033,7 +2494,20 @@ fn real_main(drm: &mut DrmBackend) {
                                 if old_active != hit {
                                     layers[layer].buttons[btn].1.active = hit;
                                     layers[layer].buttons[btn].1.changed = true;
-                                    handle_button_action(&mut uinput, &action, &cfg, hit, &mut navigation_state, &mut layers, &mut active_layer, &mut needs_complete_redraw, &original_layers, &mut touches, &mut pending_actions, Some(btn));
+                                    handle_button_action(
+                                        &mut uinput,
+                                        &action,
+                                        &cfg,
+                                        hit,
+                                        &mut navigation_state,
+                                        &mut layers,
+                                        &mut active_layer,
+                                        &mut needs_complete_redraw,
+                                        &original_layers,
+                                        &mut touches,
+                                        &mut pending_actions,
+                                        Some(btn),
+                                    );
                                 }
                             } else {
                                 // Handle visual feedback for keyboard backlight buttons (without key event)
@@ -2049,11 +2523,15 @@ fn real_main(drm: &mut DrmBackend) {
                                 continue;
                             }
                             let (layer, btn) = *touches.get(&up.seat_slot()).unwrap();
-                            
+
                             // Check if this was a keyboard backlight button
                             let button_action = &layers[layer].buttons[btn].1.action;
-                            let is_kbd_backlight_button = cfg.keyboard_brightness_enabled &&
-                                matches!(button_action, ButtonAction::Key(Key::IllumUp) | ButtonAction::Key(Key::IllumDown));
+                            let is_kbd_backlight_button = cfg.keyboard_brightness_enabled
+                                && matches!(
+                                    button_action,
+                                    ButtonAction::Key(Key::IllumUp)
+                                        | ButtonAction::Key(Key::IllumDown)
+                                );
 
                             if !is_kbd_backlight_button {
                                 // Extract the button action to avoid borrowing conflict
@@ -2062,7 +2540,20 @@ fn real_main(drm: &mut DrmBackend) {
                                 if old_active != false {
                                     layers[layer].buttons[btn].1.active = false;
                                     layers[layer].buttons[btn].1.changed = true;
-                                    handle_button_action(&mut uinput, &action, &cfg, false, &mut navigation_state, &mut layers, &mut active_layer, &mut needs_complete_redraw, &original_layers, &mut touches, &mut pending_actions, Some(btn));
+                                    handle_button_action(
+                                        &mut uinput,
+                                        &action,
+                                        &cfg,
+                                        false,
+                                        &mut navigation_state,
+                                        &mut layers,
+                                        &mut active_layer,
+                                        &mut needs_complete_redraw,
+                                        &original_layers,
+                                        &mut touches,
+                                        &mut pending_actions,
+                                        Some(btn),
+                                    );
                                 }
                             } else {
                                 // Reset visual state for keyboard backlight buttons
@@ -2079,11 +2570,16 @@ fn real_main(drm: &mut DrmBackend) {
                 _ => {}
             }
         }
-        backlight.update_backlight(&cfg);
+        if !touchbar_runtime_invalidated {
+            backlight.update_backlight(&cfg);
+        }
     }
 }
 
-fn update_hyprland_button_content(button: &mut (usize, Button), window_info: &hyprland::ActiveWindowInfo) {
+fn update_hyprland_button_content(
+    button: &mut (usize, Button),
+    window_info: &hyprland::ActiveWindowInfo,
+) {
     // Check if this is an icon-only button (plugin-hyprland-icon) or text button (plugin-hyprland)
     match &button.1.image {
         ButtonImage::Svg(_) | ButtonImage::Bitmap(_) => {
@@ -2091,34 +2587,36 @@ fn update_hyprland_button_content(button: &mut (usize, Button), window_info: &hy
             let app_icon_name = window_info.get_app_icon_name();
 
             // Use efficient cache-based loading
-            let new_icon = if let Some(path) = icon_cache::get_icon_cached(app_icon_name.clone(), None) {
-                match path.extension().and_then(|s| s.to_str()) {
-                    Some("png") => try_load_png(&path).ok(),
-                    Some("svg") => try_load_svg(path.to_str().unwrap_or("")).ok(),
-                    _ => None,
-                }
-            } else {
-                // Start async loading for next time
-                let _ = icon_cache::load_icon_async(app_icon_name, None);
-                None
-            }.unwrap_or_else(|| {
-                // Use pre-loaded fallbacks
-                icon_cache::get_icon_cached("application-default-icon".to_string(), None)
-                    .and_then(|path| match path.extension().and_then(|s| s.to_str()) {
+            let new_icon =
+                if let Some(path) = icon_cache::get_icon_cached(app_icon_name.clone(), None) {
+                    match path.extension().and_then(|s| s.to_str()) {
                         Some("png") => try_load_png(&path).ok(),
                         Some("svg") => try_load_svg(path.to_str().unwrap_or("")).ok(),
                         _ => None,
-                    })
-                    .or_else(|| {
-                        icon_cache::get_icon_cached("plugin-hyprland".to_string(), None)
-                            .and_then(|path| match path.extension().and_then(|s| s.to_str()) {
-                                Some("png") => try_load_png(&path).ok(),
-                                Some("svg") => try_load_svg(path.to_str().unwrap_or("")).ok(),
-                                _ => None,
-                            })
-                    })
-                    .unwrap_or_else(|| ButtonImage::Text("🔗".to_string()))
-            });
+                    }
+                } else {
+                    // Start async loading for next time
+                    let _ = icon_cache::load_icon_async(app_icon_name, None);
+                    None
+                }
+                .unwrap_or_else(|| {
+                    // Use pre-loaded fallbacks
+                    icon_cache::get_icon_cached("application-default-icon".to_string(), None)
+                        .and_then(|path| match path.extension().and_then(|s| s.to_str()) {
+                            Some("png") => try_load_png(&path).ok(),
+                            Some("svg") => try_load_svg(path.to_str().unwrap_or("")).ok(),
+                            _ => None,
+                        })
+                        .or_else(|| {
+                            icon_cache::get_icon_cached("plugin-hyprland".to_string(), None)
+                                .and_then(|path| match path.extension().and_then(|s| s.to_str()) {
+                                    Some("png") => try_load_png(&path).ok(),
+                                    Some("svg") => try_load_svg(path.to_str().unwrap_or("")).ok(),
+                                    _ => None,
+                                })
+                        })
+                        .unwrap_or_else(|| ButtonImage::Text("🔗".to_string()))
+                });
 
             button.1.image = new_icon;
             button.1.changed = true;
@@ -2140,14 +2638,12 @@ fn update_hyprland_button_content(button: &mut (usize, Button), window_info: &hy
                         button.1.image = ButtonImage::Text(window_title);
                         button.1.changed = true;
                         return;
-                    },
+                    }
                 } {
                     if let ButtonImage::Svg(icon_handle) = icon {
                         // Show with app icon and text - maintain consistent spacing format
-                        button.1.image = ButtonImage::TextWithIcon(
-                            format!(" {}", window_title),
-                            icon_handle
-                        );
+                        button.1.image =
+                            ButtonImage::TextWithIcon(format!(" {}", window_title), icon_handle);
                         button.1.changed = true;
                     } else {
                         // Non-SVG icon, fallback to text only
@@ -2164,21 +2660,25 @@ fn update_hyprland_button_content(button: &mut (usize, Button), window_info: &hy
                 let _ = icon_cache::load_icon_async(app_icon_name, None);
 
                 // Try pre-loaded fallback icons for text+icon mode
-                if let Some(fallback_path) = icon_cache::get_icon_cached("application-default-icon".to_string(), None) {
-                    if let Ok(fallback_icon) = match fallback_path.extension().and_then(|s| s.to_str()) {
-                        Some("png") => try_load_png(&fallback_path),
-                        Some("svg") => try_load_svg(fallback_path.to_str().unwrap_or("")),
-                        _ => {
-                            button.1.image = ButtonImage::Text(window_title);
-                            button.1.changed = true;
-                            return;
-                        },
-                    } {
+                if let Some(fallback_path) =
+                    icon_cache::get_icon_cached("application-default-icon".to_string(), None)
+                {
+                    if let Ok(fallback_icon) =
+                        match fallback_path.extension().and_then(|s| s.to_str()) {
+                            Some("png") => try_load_png(&fallback_path),
+                            Some("svg") => try_load_svg(fallback_path.to_str().unwrap_or("")),
+                            _ => {
+                                button.1.image = ButtonImage::Text(window_title);
+                                button.1.changed = true;
+                                return;
+                            }
+                        }
+                    {
                         if let ButtonImage::Svg(fallback_handle) = fallback_icon {
                             // Use fallback icon with text
                             button.1.image = ButtonImage::TextWithIcon(
                                 format!(" {}", window_title),
-                                fallback_handle
+                                fallback_handle,
                             );
                             button.1.changed = true;
                         } else {
