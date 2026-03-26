@@ -12,7 +12,7 @@ EnablePixelShift = false
 # Font
 # NOTE: Will default to a non mono space font and breaks glyph icons if
 # incorrect!
-FontTemplate = "JetBrainsMono Nerd Font Mono:light"
+FontTemplate = "JetBrainsMono Nerd Font:light"
 
 # Brightness
 AdaptiveBrightness = false
@@ -46,9 +46,10 @@ PrimaryLayerKeys = [
 # Media layer
 MediaLayerKeys = [
   { Icon = "omarchy", Action = "Expand_Omarchy", ShowButtonOutlines = false, ButtonOutlinesColor = 0.0, Stretch = 1 },
-  { Battery = "both", Action = "Battery", ShowButtonOutlines = true, Stretch = 1 },
+  { Icon = "screenshot", Action = "Command_CaptureControls", ShowButtonOutlines = false, ButtonOutlinesColor = 0.0, Stretch = 1 },
   { Time = "%I:%M%P %-e/%m", Action = "Time", Stretch = 2, ShowButtonOutlines = false, ButtonOutlinesColor = [0.2,0.2,0.2] },
-  { Text = "plugin-hyprland", Action = "Hyprland_Expand_ActiveWindow", ButtonTitle = "title", ShowAppIconAlongsideText = true, ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196,0.10588,0.149019], Stretch = 6 },
-  { Icon = "bolt", Action = "Expand_Trigger", ShowButtonOutlines = false, ButtonOutlinesColor = 0.0, Stretch = 1 },
+  { Text = "plugin-hyprland", Action = "Hyprland_Expand_ActiveWindow", ButtonTitle = "title", ShowAppIconAlongsideText = true, ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196,0.10588,0.149019], Stretch = 4 },
+  # { Icon = "bolt", Action = "Expand_Trigger", ShowButtonOutlines = false, ButtonOutlinesColor = 0.0, Stretch = 1 },
   { Icon = "settings", Action = "Expand_Settings", ShowButtonOutlines = false, ButtonOutlinesColor = 0.0, Stretch = 1 },
+  { Battery = "both", Action = "Command_Power", ShowButtonOutlines = true, Stretch = 1 },
 ]

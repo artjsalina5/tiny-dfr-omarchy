@@ -2,13 +2,9 @@
 
 # Omarchy menu
 Expand_Omarchy = [
-  { Text = "Apps",    Action = "Command_OmarchyApps",    ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "Trigger", Action = "Command_OmarchyTrigger", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "Style",   Action = "Command_OmarchyStyle",   ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "Setup",   Action = "Command_OmarchySetup",   ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "Install", Action = "Command_OmarchyInstall", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "Remove",  Action = "Command_OmarchyRemove",  ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "System",  Action = "Command_OmarchySystem",  ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Apps",              Action = "Command_OmarchyApps",     ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Refresh Screen",    Action = "Command_Refresh",         ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "System",            Action = "Command_OmarchySystem",   ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
 ]
 
 # Settings
