@@ -30,20 +30,20 @@ ExecStop=/usr/bin/modprobe brcmfmac
 ExecStop=/usr/bin/modprobe brcmfmac_wcc
 
 #touchbar and dependencies
-ExecStop=/bin/sleep 4
+ExecStop=/usr/bin/wait-for-device.sh bce 4
 ExecStop=/usr/bin/modprobe hid_appletb_bl
-ExecStop=/bin/sleep 2
+ExecStop=/usr/bin/wait-for-device.sh hid-backlight 2
 ExecStop=/usr/bin/modprobe hid_appletb_kbd
-ExecStop=/bin/sleep 2
+ExecStop=/bin/sleep 1
 ExecStop=/usr/bin/modprobe appletbdrm
-ExecStop=/bin/sleep 2
+ExecStop=/usr/bin/wait-for-device.sh drm 2
 ExecStop=/usr/bin/systemctl start tiny-dfr.service
 
 #kb backlight - needs additional script, comment if you don't have it
 #ExecStop=/usr/local/bin/kbd-backlight 14660
 
 #restart tiny-dfr after a small delay in order to restore touch input events not being injected
-ExecStop=/bin/sleep 1
+ExecStop=/bin/sleep 0.5
 ExecStop=/usr/bin/systemctl restart tiny-dfr.service
 
 [Install]
