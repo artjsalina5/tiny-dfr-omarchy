@@ -1336,7 +1336,7 @@ fn handle_button_action<F>(
 
 fn execute_pending_actions<F>(
     pending_actions: &mut Vec<PendingAction>,
-    uinput: &mut UInputHandle<F>,
+    _uinput: &mut UInputHandle<F>,
     config: &Config,
     navigation_state: &mut NavigationState,
     layers: &mut [FunctionLayer; 2],
@@ -1685,20 +1685,6 @@ fn check_touchbar_backlight() -> bool {
     Path::new("/sys/class/backlight/appletb_backlight").exists()
 }
 
-/// Detect if running on a T2 Mac
-/// Enhanced with BCE driver verification
-fn is_t2_mac() -> bool {
-    // Check for T2-specific identifiers via DMI
-    if let Ok(dmi_product) = std::fs::read_to_string("/sys/class/dmi/id/product_name") {
-        let product = dmi_product.trim().to_lowercase();
-        if product.contains("macbook") || product.contains("imac") {
-            // T2 macs have BCE driver available
-            return bce_interface::bce_driver_available();
-        }
-    }
-    false
-}
-
 fn build_libinput_pair() -> Result<(Libinput, Libinput)> {
     let mut input_tb = Libinput::new_with_udev(Interface);
     let mut input_main = Libinput::new_with_udev(Interface);
@@ -1855,47 +1841,6 @@ fn fallback_execution(command: &str) {
         eprintln!("Failed to execute command '{}': {}", command, e);
         eprintln!("Hint: If the command launches a terminal application (e.g. btop, htop, nmtui), wrap it with your terminal, e.g. 'alacritty -e btop' or 'footclient -e btop'.");
     }
-}
-
-fn expand_user_path(username: &str) -> Result<String, std::io::Error> {
-    use std::fs;
-
-    let mut paths = vec![
-        "/usr/local/bin".to_string(),
-        "/usr/bin".to_string(),
-        "/bin".to_string(),
-    ];
-
-    // Add user's local bin
-    paths.insert(0, format!("/home/{}/.local/bin", username));
-
-    // Expand .local/share/*/bin directories
-    let local_share_path = format!("/home/{}/.local/share", username);
-    println!("Expanding path, checking: {}", local_share_path);
-
-    match fs::read_dir(&local_share_path) {
-        Ok(entries) => {
-            for entry in entries.flatten() {
-                if let Ok(file_type) = entry.file_type() {
-                    if file_type.is_dir() {
-                        let bin_path = entry.path().join("bin");
-                        println!("Checking bin path: {:?}", bin_path);
-                        if bin_path.exists() {
-                            let bin_path_str = bin_path.to_string_lossy().to_string();
-                            println!("Found bin directory: {}", bin_path_str);
-                            paths.insert(1, bin_path_str);
-                        }
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            println!("Failed to read {}: {}", local_share_path, e);
-            return Err(e);
-        }
-    }
-
-    Ok(paths.join(":"))
 }
 
 extern "C" fn handle_sighup(_: i32) {

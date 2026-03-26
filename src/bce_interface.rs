@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 
 /// Mailbox commands for T2 suspend/resume coordination
 /// Matches defines in apple-bce driver
+#[allow(non_camel_case_types, dead_code)]
 #[repr(u8)]
 pub enum VhciCommand {
     VHCI_CMD_NONE = 0,           // No command
@@ -97,6 +98,7 @@ pub fn bce_send_resume() -> Result<()> {
 }
 
 /// Send Touch Bar reset command
+#[allow(dead_code)]
 pub fn bce_send_touchbar_reset() -> Result<()> {
     fs::write(BCE_PATHS.cmd_path, "VHCI_CMD_RESET_TOUCHBAR")
         .context("BCE Touch Bar reset command failed")

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use chrono::{Local, Timelike};
 use std::sync::{Arc, Mutex};
 use std::thread;
