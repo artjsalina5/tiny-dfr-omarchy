@@ -104,6 +104,7 @@ sudo install -Dm644 etc/systemd/system/omarchy-dynamic-function-row-daemon.servi
 sudo ln -sf "/etc/systemd/system/${DAEMON_SERVICE}" "/etc/systemd/system/${LEGACY_SERVICE}"
 sudo install -Dm755 bin/tiny-dfr-terminal-exec /usr/bin/tiny-dfr-terminal-exec
 sudo install -Dm755 bin/wait-for-device.sh /usr/bin/wait-for-device.sh
+sudo install -Dm755 bin/tiny-dfr-kbd-backlight /usr/bin/tiny-dfr-kbd-backlight
 sudo install -Dm755 bin/omarchy-touchbar-status /usr/bin/omarchy-touchbar-status
 sudo install -Dm755 bin/omarchy-touchbar-restart /usr/bin/omarchy-touchbar-restart
 sudo install -Dm755 bin/omarchy-touchbar-debug /usr/bin/omarchy-touchbar-debug
