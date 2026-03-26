@@ -32,7 +32,7 @@ ExecStop=-/usr/bin/modprobe apple-bce
 # ExecStop=-/usr/bin/modprobe brcmfmac_wcc
 
 #touchbar and dependencies - BCE-aware resume sequence
-ExecStop=-/usr/bin/wait-for-device.sh touchbar-bce 10
+ExecStop=-/usr/bin/wait-for-device.sh touchbar-bce 3
 ExecStop=-/usr/bin/modprobe hid_appletb_bl
 ExecStop=-/usr/bin/wait-for-device.sh hid-backlight 4
 ExecStop=-/usr/bin/modprobe hid_appletb_kbd

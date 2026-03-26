@@ -1689,9 +1689,15 @@ fn build_libinput_pair() -> Result<(Libinput, Libinput)> {
     let mut input_tb = Libinput::new_with_udev(Interface);
     let mut input_main = Libinput::new_with_udev(Interface);
 
-    input_tb
-        .udev_assign_seat("seat-touchbar")
-        .map_err(|_| anyhow!("failed to assign seat-touchbar"))?;
+    // Prefer dedicated Touch Bar seat, but fall back to seat0 when udev seat
+    // mapping is not ready yet after resume.
+    if input_tb.udev_assign_seat("seat-touchbar").is_err() {
+        eprintln!("seat-touchbar unavailable, falling back to seat0 for touch input");
+        input_tb
+            .udev_assign_seat("seat0")
+            .map_err(|_| anyhow!("failed to assign fallback seat0 for touch input"))?;
+    }
+
     input_main
         .udev_assign_seat("seat0")
         .map_err(|_| anyhow!("failed to assign seat0"))?;

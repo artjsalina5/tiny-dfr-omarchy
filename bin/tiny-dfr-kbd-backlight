@@ -37,9 +37,32 @@ restore_backlight() {
     local brightness_path
     brightness_path="$(find_kbd_backlight_path)" || exit 0
 
+    local max_path
+    max_path="${brightness_path%/brightness}/max_brightness"
+    local max_brightness
+    max_brightness="$(cat "$max_path" 2>/dev/null || echo 0)"
+    local min_restore=0
+
+    if [[ "$max_brightness" =~ ^[0-9]+$ ]] && (( max_brightness > 0 )); then
+        min_restore=$(( (max_brightness + 1) / 2 ))
+    fi
+
     if [[ -f "$STATE_FILE" ]]; then
-        cat "$STATE_FILE" > "$brightness_path" || true
+        local saved
+        saved="$(cat "$STATE_FILE" 2>/dev/null || echo 0)"
+        if [[ ! "$saved" =~ ^[0-9]+$ ]]; then
+            saved=0
+        fi
+
+        local restore_level="$saved"
+        if (( restore_level < min_restore )); then
+            restore_level="$min_restore"
+        fi
+
+        echo "$restore_level" > "$brightness_path" || true
         rm -f "$STATE_FILE"
+    elif (( min_restore > 0 )); then
+        echo "$min_restore" > "$brightness_path" || true
     fi
 }
 
