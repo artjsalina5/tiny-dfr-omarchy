@@ -9,36 +9,38 @@ Type=oneshot
 RemainAfterExit=yes
 
 # Save keyboard backlight and turn it off during suspend.
-ExecStart=/usr/bin/tiny-dfr-kbd-backlight save-off
+ExecStart=-/usr/bin/tiny-dfr-kbd-backlight save-off
 
 #touchbar and dependencies
-ExecStart=/usr/bin/systemctl stop omarchy-dynamic-function-row-daemon.service
-ExecStart=/usr/bin/modprobe -r appletbdrm
-ExecStart=/usr/bin/modprobe -r hid_appletb_bl
-ExecStart=/usr/bin/modprobe -r hid_appletb_kbd
+ExecStart=-/usr/bin/systemctl stop omarchy-dynamic-function-row-daemon.service
+ExecStart=-/usr/bin/modprobe -r appletbdrm
+ExecStart=-/usr/bin/modprobe -r hid_appletb_bl
+ExecStart=-/usr/bin/modprobe -r hid_appletb_kbd
 
-# WiFi - comment these if your network is fine after suspend
-ExecStart=/usr/bin/modprobe -r brcmfmac_wcc
-ExecStart=/usr/bin/modprobe -r brcmfmac
+# WiFi reload is intentionally disabled for faster wake.
+# Re-enable these lines only if your WiFi fails after resume.
+# ExecStart=-/usr/bin/modprobe -r brcmfmac_wcc
+# ExecStart=-/usr/bin/modprobe -r brcmfmac
 
-ExecStart=/usr/bin/rmmod -f apple-bce
+ExecStart=-/usr/bin/rmmod -f apple-bce
 
-ExecStop=/usr/bin/modprobe apple-bce
+ExecStop=-/usr/bin/modprobe apple-bce
 
-# WiFi - comment these if your network is fine after suspend
-ExecStop=/usr/bin/modprobe brcmfmac
-ExecStop=/usr/bin/modprobe brcmfmac_wcc
+# WiFi reload is intentionally disabled for faster wake.
+# Re-enable these lines only if your WiFi fails after resume.
+# ExecStop=-/usr/bin/modprobe brcmfmac
+# ExecStop=-/usr/bin/modprobe brcmfmac_wcc
 
 #touchbar and dependencies - BCE-aware resume sequence
 ExecStop=/usr/bin/wait-for-device.sh touchbar-bce 10
-ExecStop=/usr/bin/modprobe hid_appletb_bl
+ExecStop=-/usr/bin/modprobe hid_appletb_bl
 ExecStop=/usr/bin/wait-for-device.sh hid-backlight 2
-ExecStop=/usr/bin/modprobe hid_appletb_kbd
+ExecStop=-/usr/bin/modprobe hid_appletb_kbd
 ExecStop=/usr/bin/wait-for-device.sh hid-kbd 2
-ExecStop=/usr/bin/tiny-dfr-kbd-backlight restore
-ExecStop=/usr/bin/modprobe appletbdrm
+ExecStop=-/usr/bin/tiny-dfr-kbd-backlight restore
+ExecStop=-/usr/bin/modprobe appletbdrm
 ExecStop=/usr/bin/wait-for-device.sh drm 2
-ExecStop=/usr/bin/systemctl restart omarchy-dynamic-function-row-daemon.service
+ExecStop=-/usr/bin/systemctl restart omarchy-dynamic-function-row-daemon.service
 
 [Install]
 WantedBy=sleep.target
