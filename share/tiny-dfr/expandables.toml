@@ -2,9 +2,24 @@
 
 # Omarchy menu
 Expand_Omarchy = [
-  { Text = "Apps",              Action = "Command_OmarchyApps",     ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "Refresh Screen",    Action = "Command_Refresh",         ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
-  { Text = "System",            Action = "Command_OmarchySystem",   ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Apps",        Action = "Command_OmarchyApps",       ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Windows",     Action = "Command_OmarchyWindows",    ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Workspaces",  Action = "Command_OmarchyWorkspaces", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Files",       Action = "Command_OmarchyFiles",      ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Terminal",    Action = "Command_OmarchyTerminal",   ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "System",      Action = "Command_OmarchySystem",     ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Power",       Action = "Command_OmarchyPower",      ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Trigger",     Action = "Command_OmarchyTrigger",    ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+]
+
+# Omarchy Quick Actions
+Expand_OmarchyQuick = [
+  { Text = "Screenshot",     Action = "Command_ScreenshotRegion",      ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Emoji",          Action = "Command_OmarchyEmoji",          ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Clipboard",      Action = "Command_OmarchyClipboard",      ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Notifications",  Action = "Command_OmarchyNotifications",  ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Next Theme",     Action = "Command_ThemeNext",             ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Wallpaper",      Action = "Command_WallpaperNext",         ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
 ]
 
 # Settings

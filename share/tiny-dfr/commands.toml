@@ -17,8 +17,24 @@ Command_OmarchySetup   = "omarchy-menu setup"
 Command_OmarchyInstall = "omarchy-menu install"
 Command_OmarchyRemove  = "omarchy-menu remove"
 Command_OmarchySystem  = "omarchy-menu system"
+Command_OmarchyPower   = "omarchy-menu power"
 Command_Alacritty      = "uwsm app -- alacritty"
 Command_ColorPicker    = "pkill hyprpicker || hyprpicker -a"
+
+# Additional Omarchy Commands
+Command_OmarchyClipboard      = "omarchy-menu clipboard"
+Command_OmarchyEmoji          = "omarchy-menu emoji"
+Command_OmarchyNotifications  = "omarchy-menu notifications"
+Command_OmarchyWindows        = "omarchy-menu windows"
+Command_OmarchyWorkspaces     = "omarchy-menu workspaces"
+Command_OmarchyFiles          = "omarchy-launch-files"
+Command_OmarchyTerminal       = "omarchy-launch-terminal"
+Command_OmarchySystemMonitor  = "omarchy-launch-system"
+
+# Omarchy Theme & Wallpaper
+Command_ThemeNext       = "omarchy-theme-next"
+Command_ThemeCurrent    = "omarchy-theme-current"
+Command_WallpaperNext   = "omarchy-theme-bg-next"
 
 # Display brightness (internal panel via iGPU gmux backlight)
 Command_DisplayBrightnessDown = "brightnessctl -d gmux_backlight set 5%-"
@@ -27,9 +43,9 @@ Command_Refresh               = "sh -lc \"hyprctl dispatch dpms off; sleep 1; hy
 
 # Screenshots
 Command_CaptureControls   = "omarchy-menu capture"
-Command_ScreenshotRegion  = "sh -c \"omarchy-cmd-screenshot region\""
-Command_ScreenshotWindow  = "sh -c \"omarchy-cmd-screenshot windows\""
-Command_ScreenshotDisplay = "sh -c \"omarchy-cmd-screenshot fullscreen\""
+Command_ScreenshotRegion  = "sh -c 'sleep 0.2; omarchy-cmd-screenshot region'"
+Command_ScreenshotWindow  = "sh -c 'sleep 0.2; omarchy-cmd-screenshot windows'"
+Command_ScreenshotDisplay = "sh -c 'sleep 0.2; omarchy-cmd-screenshot fullscreen'"
 
 # Screen recording
 Command_ScreenrecordRegion       = "sh -c \"omarchy-cmd-screenrecord region\""
