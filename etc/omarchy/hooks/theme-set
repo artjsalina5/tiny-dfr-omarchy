@@ -1,7 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-# Omarchy passes the selected theme name as $1, but we only need to signal tiny-dfr.
-if systemctl list-unit-files tiny-dfr.service >/dev/null 2>&1; then
+SERVICE_NAME="omarchy-dynamic-function-row-daemon.service"
+
+# Omarchy passes the selected theme name as $1, but we only need to signal the daemon.
+if systemctl list-unit-files "$SERVICE_NAME" >/dev/null 2>&1; then
+    systemctl kill -s HUP "$SERVICE_NAME" || true
+elif systemctl list-unit-files tiny-dfr.service >/dev/null 2>&1; then
+    # Backward compatibility if only legacy unit exists.
     systemctl kill -s HUP tiny-dfr.service || true
 fi

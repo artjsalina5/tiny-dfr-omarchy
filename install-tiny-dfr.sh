@@ -1,10 +1,35 @@
 #!/bin/bash
 # install-tiny-dfr.sh
-# Installation script for tiny-dfr on T2 MacBooks
+# Installation script for Omarchy Dynamic Function Row Daemon on T2 MacBooks
 
 set -e
 
 SKIP_DEPS=false
+DAEMON_BIN="omarchy-dynamic-function-row-daemon"
+LEGACY_BIN="tiny-dfr"
+DAEMON_SERVICE="${DAEMON_BIN}.service"
+LEGACY_SERVICE="tiny-dfr.service"
+
+install_arch_deps() {
+    local user_home="$1"
+    local omarchy_bin_dir="${user_home}/.local/share/omarchy/bin"
+
+    # Prefer Omarchy package helper when available in Omarchy-managed installs.
+    if [[ -x "${omarchy_bin_dir}/omarchy-pkg-add" ]]; then
+        echo "Installing dependencies with Omarchy package helper..."
+        "${omarchy_bin_dir}/omarchy-pkg-add" rust cargo cairo libinput freetype2 fontconfig librsvg
+        return
+    fi
+
+    if command -v omarchy-pkg-add &> /dev/null; then
+        echo "Installing dependencies with omarchy-pkg-add..."
+        omarchy-pkg-add rust cargo cairo libinput freetype2 fontconfig librsvg
+        return
+    fi
+
+    echo "Installing dependencies (Arch/pacman)..."
+    sudo pacman -S --needed --noconfirm rust cargo cairo libinput freetype2 fontconfig librsvg
+}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -20,7 +45,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-echo "Installing tiny-dfr for T2 MacBook..."
+echo "Installing Omarchy Dynamic Function Row Daemon for T2 MacBook..."
 
 # Check if running on T2 Mac
 if ! grep -q "MacBookPro16,1\|MacBookAir" /sys/class/dmi/id/product_name 2>/dev/null; then
@@ -38,11 +63,13 @@ if [[ $EUID -eq 0 ]]; then
     exit 1
 fi
 
+CURRENT_USER=$(whoami)
+USER_HOME="/home/$CURRENT_USER"
+
 # Install dependencies based on distro (skip if --skip-deps)
 if ! $SKIP_DEPS; then
     if command -v pacman &> /dev/null; then
-        echo "Installing dependencies (Arch)..."
-        sudo pacman -S --needed --noconfirm rust cargo cairo libinput freetype2 fontconfig librsvg
+        install_arch_deps "$USER_HOME"
     elif command -v apt &> /dev/null; then
         echo "Installing dependencies (Debian/Ubuntu)..."
         sudo apt update
@@ -60,18 +87,21 @@ else
 fi
 
 # Build from source
-echo "Building tiny-dfr..."
-cargo build --release
+echo "Building daemon binary..."
+cargo build --release --bin tiny-dfr
 
 # Install
-echo "Installing tiny-dfr..."
+echo "Installing ${DAEMON_BIN}..."
 # Stop service if running to avoid "Text file busy" error
-sudo systemctl stop tiny-dfr 2>/dev/null || true
-sudo cp target/release/tiny-dfr /usr/bin/
+sudo systemctl stop "$DAEMON_SERVICE" 2>/dev/null || true
+sudo systemctl stop "$LEGACY_SERVICE" 2>/dev/null || true
+sudo install -Dm755 target/release/tiny-dfr "/usr/bin/${DAEMON_BIN}"
+sudo ln -sf "/usr/bin/${DAEMON_BIN}" "/usr/bin/${LEGACY_BIN}"
 sudo mkdir -p /usr/share/tiny-dfr
 sudo cp share/tiny-dfr/* /usr/share/tiny-dfr/
 sudo cp etc/systemd/system/suspend-fix-t2.service /etc/systemd/system/
-sudo cp etc/systemd/system/tiny-dfr.service /etc/systemd/system/
+sudo install -Dm644 etc/systemd/system/omarchy-dynamic-function-row-daemon.service "/etc/systemd/system/${DAEMON_SERVICE}"
+sudo ln -sf "/etc/systemd/system/${DAEMON_SERVICE}" "/etc/systemd/system/${LEGACY_SERVICE}"
 sudo install -Dm755 bin/tiny-dfr-terminal-exec /usr/bin/tiny-dfr-terminal-exec
 sudo install -Dm755 bin/wait-for-device.sh /usr/bin/wait-for-device.sh
 sudo install -Dm755 bin/omarchy-touchbar-status /usr/bin/omarchy-touchbar-status
@@ -86,13 +116,11 @@ sudo udevadm trigger
 
 # Setup systemd service
 sudo systemctl daemon-reload
-sudo systemctl enable tiny-dfr
+sudo systemctl enable "$DAEMON_SERVICE"
 sudo systemctl enable suspend-fix-t2.service
 
 # Detect user environment for proper configuration
 echo "Detecting user environment..."
-CURRENT_USER=$(whoami)
-USER_HOME="/home/$CURRENT_USER"
 USER_UID=$(id -u $CURRENT_USER)
 RUNTIME_DIR="/run/user/$USER_UID"
 
@@ -159,8 +187,8 @@ echo "Setting MediaLayerDefault = true in config..."
 sudo sed -i 's/MediaLayerDefault = false/MediaLayerDefault = true/' /etc/tiny-dfr/config.toml
 
 # Restart the service to apply config changes
-echo "Restarting tiny-dfr service..."
-sudo systemctl restart tiny-dfr
+echo "Restarting ${DAEMON_SERVICE}..."
+sudo systemctl restart "$DAEMON_SERVICE"
 
 echo ""
 echo "Checking Omarchy integration..."

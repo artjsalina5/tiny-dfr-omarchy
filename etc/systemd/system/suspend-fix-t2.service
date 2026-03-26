@@ -12,7 +12,7 @@ RemainAfterExit=yes
 #ExecStart=/usr/local/bin/kbd-backlight 0
 
 #touchbar and dependencies
-ExecStart=/usr/bin/systemctl stop tiny-dfr.service
+ExecStart=/usr/bin/systemctl stop omarchy-dynamic-function-row-daemon.service
 ExecStart=/usr/bin/modprobe -r appletbdrm
 ExecStart=/usr/bin/modprobe -r hid_appletb_bl
 ExecStart=/usr/bin/modprobe -r hid_appletb_kbd
@@ -37,14 +37,14 @@ ExecStop=/usr/bin/modprobe hid_appletb_kbd
 ExecStop=/bin/sleep 1
 ExecStop=/usr/bin/modprobe appletbdrm
 ExecStop=/usr/bin/wait-for-device.sh drm 2
-ExecStop=/usr/bin/systemctl start tiny-dfr.service
+ExecStop=/usr/bin/systemctl start omarchy-dynamic-function-row-daemon.service
 
 #kb backlight - needs additional script, comment if you don't have it
 #ExecStop=/usr/local/bin/kbd-backlight 14660
 
-#restart tiny-dfr after a small delay in order to restore touch input events not being injected
+#restart daemon after a small delay in order to restore touch input events not being injected
 ExecStop=/bin/sleep 0.5
-ExecStop=/usr/bin/systemctl restart tiny-dfr.service
+ExecStop=/usr/bin/systemctl restart omarchy-dynamic-function-row-daemon.service
 
 [Install]
 WantedBy=sleep.target

@@ -1,14 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "=== tiny-dfr Touch Bar Status ==="
+SERVICE_NAME="omarchy-dynamic-function-row-daemon.service"
+
+echo "=== omarchy-dynamic-function-row-daemon Touch Bar Status ==="
 
 echo "Service:"
-if systemctl is-active --quiet tiny-dfr.service; then
-    echo "  tiny-dfr.service: active"
+if systemctl is-active --quiet "$SERVICE_NAME"; then
+    echo "  ${SERVICE_NAME}: active"
 else
-    state=$(systemctl is-active tiny-dfr.service 2>/dev/null || echo "unknown")
-    echo "  tiny-dfr.service: ${state}"
+    state=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo "unknown")
+    echo "  ${SERVICE_NAME}: ${state}"
 fi
 
 echo ""

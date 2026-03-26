@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+SERVICE_NAME="omarchy-dynamic-function-row-daemon.service"
+
 run_as_root() {
     if [ "${EUID:-$(id -u)}" -eq 0 ]; then
         "$@"
@@ -12,7 +14,7 @@ run_as_root() {
     fi
 }
 
-echo "=== tiny-dfr Touch Bar Diagnostics ==="
+echo "=== omarchy-dynamic-function-row-daemon Touch Bar Diagnostics ==="
 echo "Timestamp: $(date -Iseconds)"
 echo ""
 
@@ -37,5 +39,5 @@ echo "=== Kernel modules ==="
 lsmod | grep -E 'apple_bce|appletbdrm|hid_appletb_bl|hid_appletb_kbd|brcmfmac' || true
 
 echo ""
-echo "=== tiny-dfr logs (last 120 lines) ==="
-run_as_root journalctl -u tiny-dfr.service -n 120 --no-pager || true
+echo "=== daemon logs (last 120 lines) ==="
+run_as_root journalctl -u "$SERVICE_NAME" -n 120 --no-pager || true
