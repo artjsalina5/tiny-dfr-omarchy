@@ -73,6 +73,7 @@ sudo cp share/tiny-dfr/* /usr/share/tiny-dfr/
 sudo cp etc/systemd/system/suspend-fix-t2.service /etc/systemd/system/
 sudo cp etc/systemd/system/tiny-dfr.service /etc/systemd/system/
 sudo install -Dm755 bin/tiny-dfr-terminal-exec /usr/bin/tiny-dfr-terminal-exec
+sudo install -Dm755 bin/wait-for-device.sh /usr/bin/wait-for-device.sh
 
 # Install udev rules
 sudo cp etc/udev/rules.d/99-touchbar-seat.rules /etc/udev/rules.d/
@@ -153,6 +154,18 @@ sudo sed -i 's/MediaLayerDefault = false/MediaLayerDefault = true/' /etc/tiny-df
 # Restart the service to apply config changes
 echo "Restarting tiny-dfr service..."
 sudo systemctl restart tiny-dfr
+
+echo ""
+echo "Checking Omarchy integration..."
+if command -v omarchy-menu &> /dev/null; then
+    echo "✓ Omarchy commands found"
+    if [ -f "$USER_HOME/.config/omarchy/current/theme/colors.toml" ]; then
+        echo "✓ Omarchy theme detected (theme sync available)"
+    fi
+else
+    echo "⚠ Omarchy commands not found - some Touch Bar buttons may not work"
+    echo "  Install Omarchy for full integration: https://omarchy.org"
+fi
 
 echo ""
 echo "✓ Installation complete!"
