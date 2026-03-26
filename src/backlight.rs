@@ -91,19 +91,26 @@ impl BacklightManager {
                 match find_backlight() {
                     Ok(path) => break Some(path),
                     Err(_) if attempts < 5 => {
-                        eprintln!("Touch bar backlight not found (attempt {}), retrying in 1s...", attempts + 1);
+                        eprintln!(
+                            "Touch bar backlight not found (attempt {}), retrying in 1s...",
+                            attempts + 1
+                        );
                         std::thread::sleep(std::time::Duration::from_secs(1));
                         attempts += 1;
                     }
                     Err(e) => {
-                        eprintln!("WARNING: Failed to find Touch Bar backlight after {} attempts: {}", attempts + 1, e);
+                        eprintln!(
+                            "WARNING: Failed to find Touch Bar backlight after {} attempts: {}",
+                            attempts + 1,
+                            e
+                        );
                         eprintln!("Touchbar brightness control disabled - display will work with fixed brightness");
                         break None;
                     }
                 }
             }
         };
-        
+
         let (bl_file, max_bl, current_bl) = if let Some(ref path) = bl_path {
             let file = OpenOptions::new()
                 .write(true)
@@ -118,7 +125,7 @@ impl BacklightManager {
         };
 
         let display_bl_path = find_display_backlight().ok();
-        
+
         BacklightManager {
             bl_file,
             lid_state: SwitchState::Off,
@@ -156,7 +163,7 @@ impl BacklightManager {
         if self.bl_file.is_none() {
             return;
         }
-        
+
         let since_last_active = (Instant::now() - self.last_active).as_millis() as u64;
         let new_bl = min(
             self.max_bl,

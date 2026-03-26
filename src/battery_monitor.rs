@@ -65,8 +65,7 @@ impl BatteryMonitor {
 
     fn read_battery_state(battery: &str) -> BatteryInfo {
         let status_path = format!("/sys/class/power_supply/{}/status", battery);
-        let status = fs::read_to_string(&status_path)
-            .unwrap_or_else(|_| "Unknown".to_string());
+        let status = fs::read_to_string(&status_path).unwrap_or_else(|_| "Unknown".to_string());
 
         let capacity = Self::read_capacity(battery);
 

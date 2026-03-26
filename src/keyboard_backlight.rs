@@ -17,32 +17,34 @@ pub struct KeyboardBacklightManager {
 
 impl KeyboardBacklightManager {
     pub fn new() -> KeyboardBacklightManager {
-        let (kbd_bl_file, max_brightness, current_brightness) = 
-            if let Ok(path) = find_keyboard_backlight() {
-                println!("Found keyboard backlight at: {}", path.display());
-                
-                // Open the brightness file BEFORE dropping privileges
-                let brightness_path = path.join("brightness");
-                let file = match OpenOptions::new()
-                    .write(true)
-                    .open(&brightness_path) {
-                    Ok(f) => Some(f),
-                    Err(e) => {
-                        eprintln!("Failed to open keyboard backlight brightness file: {}", e);
-                        None
-                    }
-                };
-                
-                let max_bl = read_attr(&path, "max_brightness").unwrap_or(255);
-                let current_bl = read_attr(&path, "brightness").unwrap_or(0);
-                
-                println!("Keyboard backlight - Max: {}, Current: {}", max_bl, current_bl);
-                
-                (file, max_bl, current_bl)
-            } else {
-                println!("No keyboard backlight device found - keyboard backlight control disabled");
-                (None, 255, 0)
+        let (kbd_bl_file, max_brightness, current_brightness) = if let Ok(path) =
+            find_keyboard_backlight()
+        {
+            println!("Found keyboard backlight at: {}", path.display());
+
+            // Open the brightness file BEFORE dropping privileges
+            let brightness_path = path.join("brightness");
+            let file = match OpenOptions::new().write(true).open(&brightness_path) {
+                Ok(f) => Some(f),
+                Err(e) => {
+                    eprintln!("Failed to open keyboard backlight brightness file: {}", e);
+                    None
+                }
             };
+
+            let max_bl = read_attr(&path, "max_brightness").unwrap_or(255);
+            let current_bl = read_attr(&path, "brightness").unwrap_or(0);
+
+            println!(
+                "Keyboard backlight - Max: {}, Current: {}",
+                max_bl, current_bl
+            );
+
+            (file, max_bl, current_bl)
+        } else {
+            println!("No keyboard backlight device found - keyboard backlight control disabled");
+            (None, 255, 0)
+        };
 
         KeyboardBacklightManager {
             kbd_bl_file,
@@ -62,13 +64,16 @@ impl KeyboardBacklightManager {
         if self.kbd_bl_file.is_none() {
             return false;
         }
-        
-        let new_brightness = (self.current_brightness + self.brightness_step)
-            .min(self.max_brightness);
-        
+
+        let new_brightness =
+            (self.current_brightness + self.brightness_step).min(self.max_brightness);
+
         if new_brightness != self.current_brightness {
             if self.set_brightness(new_brightness) {
-                println!("Keyboard backlight increased to: {}/{}", self.current_brightness, self.max_brightness);
+                println!(
+                    "Keyboard backlight increased to: {}/{}",
+                    self.current_brightness, self.max_brightness
+                );
                 return true;
             }
         }
@@ -79,12 +84,15 @@ impl KeyboardBacklightManager {
         if self.kbd_bl_file.is_none() {
             return false;
         }
-        
+
         let new_brightness = self.current_brightness.saturating_sub(self.brightness_step);
-        
+
         if new_brightness != self.current_brightness {
             if self.set_brightness(new_brightness) {
-                println!("Keyboard backlight decreased to: {}/{}", self.current_brightness, self.max_brightness);
+                println!(
+                    "Keyboard backlight decreased to: {}/{}",
+                    self.current_brightness, self.max_brightness
+                );
                 return true;
             }
         }
@@ -94,7 +102,7 @@ impl KeyboardBacklightManager {
     pub fn set_brightness(&mut self, brightness: u32) -> bool {
         if let Some(ref mut file) = self.kbd_bl_file {
             let clamped_brightness = brightness.min(self.max_brightness);
-            
+
             match file.write_all(format!("{}\n", clamped_brightness).as_bytes()) {
                 Ok(()) => {
                     // Flush to ensure the write is committed immediately
@@ -147,25 +155,28 @@ fn find_keyboard_backlight() -> Result<PathBuf> {
     if t2_path.exists() && t2_path.join("brightness").exists() {
         return Ok(t2_path);
     }
-    
+
     // Priority 2: Common SMC keyboard backlight
     let smc_path = PathBuf::from("/sys/class/leds/smc::kbd_backlight");
     if smc_path.exists() && smc_path.join("brightness").exists() {
         return Ok(smc_path);
     }
-    
+
     // Priority 3: Search for any keyboard backlight LED
     if let Ok(entries) = fs::read_dir("/sys/class/leds/") {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_lowercase();
-            if (name.contains("kbd") || name.contains("keyboard")) 
-                && entry.path().join("brightness").exists() {
+            if (name.contains("kbd") || name.contains("keyboard"))
+                && entry.path().join("brightness").exists()
+            {
                 return Ok(entry.path());
             }
         }
     }
-    
-    Err(anyhow!("No keyboard backlight device found in /sys/class/leds/"))
+
+    Err(anyhow!(
+        "No keyboard backlight device found in /sys/class/leds/"
+    ))
 }
 
 fn read_attr(path: &Path, attr: &str) -> Option<u32> {
@@ -191,11 +202,11 @@ mod tests {
 
         // Test normal increase
         assert_eq!(manager.current_brightness, 50);
-        
+
         // Test clamping at max
         manager.current_brightness = 90;
-        let new_brightness = (manager.current_brightness + manager.brightness_step)
-            .min(manager.max_brightness);
+        let new_brightness =
+            (manager.current_brightness + manager.brightness_step).min(manager.max_brightness);
         assert_eq!(new_brightness, 100); // Should clamp to max
     }
 
