@@ -1,0 +1,7 @@
+#!/bin/bash
+set -euo pipefail
+
+# Omarchy passes the selected theme name as $1, but we only need to signal tiny-dfr.
+if systemctl list-unit-files tiny-dfr.service >/dev/null 2>&1; then
+    systemctl kill -s HUP tiny-dfr.service || true
+fi

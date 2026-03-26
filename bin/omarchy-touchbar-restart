@@ -1,0 +1,16 @@
+#!/bin/bash
+set -euo pipefail
+
+run_as_root() {
+    if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        echo "Error: root privileges required to restart tiny-dfr.service" >&2
+        exit 1
+    fi
+}
+
+run_as_root systemctl restart tiny-dfr.service
+exec omarchy-touchbar-status

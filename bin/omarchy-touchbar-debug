@@ -1,0 +1,41 @@
+#!/bin/bash
+set -euo pipefail
+
+run_as_root() {
+    if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        echo "Error: root privileges required for full diagnostics" >&2
+        exit 1
+    fi
+}
+
+echo "=== tiny-dfr Touch Bar Diagnostics ==="
+echo "Timestamp: $(date -Iseconds)"
+echo ""
+
+omarchy-touchbar-status || true
+
+echo ""
+echo "=== BCE status files ==="
+for path in \
+    /sys/class/bce/vhci/cmd_status \
+    /sys/class/bce/vhci/dma_status \
+    /sys/class/pci_bus/0000:04/link_status; do
+    if [ -f "$path" ]; then
+        echo "[$path]"
+        cat "$path"
+    else
+        echo "[$path] missing"
+    fi
+    echo ""
+done
+
+echo "=== Kernel modules ==="
+lsmod | grep -E 'apple_bce|appletbdrm|hid_appletb_bl|hid_appletb_kbd|brcmfmac' || true
+
+echo ""
+echo "=== tiny-dfr logs (last 120 lines) ==="
+run_as_root journalctl -u tiny-dfr.service -n 120 --no-pager || true

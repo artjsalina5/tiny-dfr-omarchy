@@ -1,0 +1,46 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "=== tiny-dfr Touch Bar Status ==="
+
+echo "Service:"
+if systemctl is-active --quiet tiny-dfr.service; then
+    echo "  tiny-dfr.service: active"
+else
+    state=$(systemctl is-active tiny-dfr.service 2>/dev/null || echo "unknown")
+    echo "  tiny-dfr.service: ${state}"
+fi
+
+echo ""
+echo "Hardware readiness:"
+if /usr/bin/wait-for-device.sh touchbar-minimal 1 >/dev/null 2>&1; then
+    echo "  Touch Bar minimal (DRM+backlight): ready"
+else
+    echo "  Touch Bar minimal (DRM+backlight): not ready"
+fi
+
+if /usr/bin/wait-for-device.sh touchbar-bce 1 >/dev/null 2>&1; then
+    echo "  BCE mailbox state: ready"
+else
+    echo "  BCE mailbox state: not ready"
+fi
+
+if /usr/bin/wait-for-device.sh touchbar-pci-link 1 >/dev/null 2>&1; then
+    echo "  BCE PCI link: ready"
+else
+    echo "  BCE PCI link: not ready"
+fi
+
+echo ""
+echo "Theme integration:"
+if [ -f "$HOME/.config/omarchy/current/theme/colors.toml" ]; then
+    echo "  Omarchy colors: available"
+else
+    echo "  Omarchy colors: unavailable"
+fi
+
+echo ""
+echo "Device nodes:"
+[ -e /dev/dri/card0 ] && echo "  /dev/dri/card0: present" || echo "  /dev/dri/card0: missing"
+[ -e /sys/class/backlight/appletb_backlight ] && echo "  appletb_backlight: present" || echo "  appletb_backlight: missing"
+[ -e /sys/class/bce/vhci/cmd_status ] && echo "  BCE cmd_status: present" || echo "  BCE cmd_status: missing"
