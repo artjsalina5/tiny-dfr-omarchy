@@ -195,7 +195,4 @@ impl BacklightManager {
             }
         }
     }
-    pub fn current_bl(&self) -> u32 {
-        self.current_bl
-    }
 }

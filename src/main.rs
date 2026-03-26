@@ -1771,17 +1771,24 @@ fn try_reinitialize_touchbar_runtime(
     // Critical: Send resume command to BCE and wait for proper state
     if bce_interface::bce_is_suspended() {
         eprintln!("BCE suspended - issuing T2 resume command...");
-        bce_interface::bce_send_resume()?;
+        if let Err(e) = bce_interface::bce_send_resume() {
+            eprintln!("Warning: BCE resume command failed: {e:#}");
+        }
 
         // Wait for DMA transfers to complete and PCI link training
         eprintln!("Waiting for BCE to become ready (DMA and PCI link)...");
-        bce_interface::bce_wait_ready(Duration::from_secs(10))?;
+        if let Err(e) = bce_interface::bce_wait_ready(Duration::from_secs(3)) {
+            eprintln!("Warning: BCE readiness check timed out: {e:#}");
+        }
 
         // Critical: Wait for PCI Express link re-establishment (post-S3)
         // Prevents "scheduling while atomic" BUGs and MMIO access before ready
         eprintln!("Waiting for BCE PCI Express link training...");
-        bce_interface::wait_pci_link_ready(Duration::from_secs(15))?;
-        eprintln!("BCE PCI link trained and ready");
+        if let Err(e) = bce_interface::wait_pci_link_ready(Duration::from_secs(4)) {
+            eprintln!("Warning: BCE PCI link readiness check timed out: {e:#}");
+        } else {
+            eprintln!("BCE PCI link trained and ready");
+        }
     } else {
         eprintln!("BCE not suspended - proceeding with reinitialization");
     }
@@ -2537,10 +2544,6 @@ fn real_main(drm: &mut DrmBackend) {
                     }
                 }
                 Event::Touch(te) => {
-                    if backlight.current_bl() == 0 {
-                        continue;
-                    }
-
                     if !is_touchbar_device(&te.device()) {
                         continue;
                     }
