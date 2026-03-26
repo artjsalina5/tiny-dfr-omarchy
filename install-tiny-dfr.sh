@@ -117,6 +117,13 @@ sudo udevadm trigger
 
 # Setup systemd service
 sudo systemctl daemon-reload
+
+# Avoid duplicate suspend handlers on Omarchy installs.
+if systemctl list-unit-files t2-suspend.service >/dev/null 2>&1; then
+    echo "Detected Omarchy t2-suspend.service; disabling it to avoid duplicate resume workflows..."
+    sudo systemctl disable --now t2-suspend.service 2>/dev/null || true
+fi
+
 sudo systemctl enable "$DAEMON_SERVICE"
 sudo systemctl enable suspend-fix-t2.service
 
