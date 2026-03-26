@@ -15,12 +15,14 @@ if [[ -z "$DEVICE_TYPE" ]]; then
 fi
 
 check_device() {
-    case "$DEVICE_TYPE" in
+    local check_type="${1:-$DEVICE_TYPE}"
+
+    case "$check_type" in
         drm)
             [[ -e /dev/dri/card1 ]]
             ;;
         hid-backlight)
-            [[ -e /sys/class/backlight/apple-touch-bar-backlight ]]
+            [[ -e /sys/class/backlight/appletb_backlight ]] || [[ -e /sys/class/backlight/apple-touch-bar-backlight ]]
             ;;
         bce)
             [[ -d /sys/bus/pci/drivers/apple-bce ]] && lsmod | grep -q apple_bce
@@ -53,7 +55,7 @@ check_device() {
             # Full Touch Bar readiness check: BCE + DRM + Backlight
             check_device touchbar-bce && \
             [ -e "/dev/dri/card0" ] && \
-            [ -e "/sys/class/backlight/appletb_backlight" ]
+            check_device hid-backlight
             ;;
         touchbar-pci-link)
             # Specifically wait for PCI Express link training (critical after resume)
