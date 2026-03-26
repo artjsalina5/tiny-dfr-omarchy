@@ -45,23 +45,55 @@ pub const BCE_PATHS: BcePaths = BcePaths {
     pci_link_path: "/sys/class/pci_bus/0000:04/link_status", // BCE bus
 };
 
+const BCE_VHCI_CLASS_PATH: &str = "/sys/class/bce-vhci/bce-vhci";
+const BCE_VHCI_RUNTIME_STATUS_PATH: &str = "/sys/class/bce-vhci/bce-vhci/power/runtime_status";
+
+fn has_mailbox_interface() -> bool {
+    Path::new(BCE_PATHS.cmd_path).exists() && Path::new(BCE_PATHS.cmd_status_path).exists()
+}
+
+fn has_vhci_interface() -> bool {
+    Path::new(BCE_VHCI_CLASS_PATH).exists() || Path::new("/dev/bce-vhci").exists()
+}
+
 /// Check if BCE driver is available
 pub fn bce_driver_available() -> bool {
-    Path::new(BCE_PATHS.cmd_path).exists()
+    has_mailbox_interface() || has_vhci_interface() || Path::new("/sys/module/apple_bce").exists()
 }
 
 /// Check if BCE is suspended (pause command issued)
 pub fn bce_is_suspended() -> bool {
-    fs::read_to_string(BCE_PATHS.cmd_status_path)
-        .ok()
-        .map(|s| s.contains("VHCI_CMD_T2_PAUSE"))
-        .unwrap_or(false)
+    if has_mailbox_interface() {
+        return fs::read_to_string(BCE_PATHS.cmd_status_path)
+            .ok()
+            .map(|s| s.contains("VHCI_CMD_T2_PAUSE") || s.contains("SUSPEND"))
+            .unwrap_or(false);
+    }
+
+    if has_vhci_interface() {
+        return fs::read_to_string(BCE_VHCI_RUNTIME_STATUS_PATH)
+            .ok()
+            .map(|s| s.trim().eq_ignore_ascii_case("suspended"))
+            .unwrap_or(false);
+    }
+
+    false
 }
 
 /// Send T2 resume command to BCE mailbox
 /// Similar to apple_bce_t2_resume() in kernel driver
 pub fn bce_send_resume() -> Result<()> {
-    fs::write(BCE_PATHS.cmd_path, "VHCI_CMD_T2_RESUME").context("BCE resume command failed")
+    if has_mailbox_interface() {
+        return fs::write(BCE_PATHS.cmd_path, "VHCI_CMD_T2_RESUME")
+            .context("BCE resume command failed");
+    }
+
+    if has_vhci_interface() {
+        // Upstream apple-bce-drv does not expose an equivalent user-space mailbox command.
+        return Ok(());
+    }
+
+    Err(anyhow!("BCE resume command unavailable: no supported interface found"))
 }
 
 /// Send Touch Bar reset command
@@ -129,32 +161,48 @@ pub fn wait_pci_link_ready(timeout: Duration) -> Result<()> {
 /// Check if BCE device is fully ready for Touch Bar operations
 /// Used by touchbar_nodes_ready() for comprehensive hardware validation
 pub fn bce_ready_for_resume() -> bool {
-    // Check mailbox status
-    if let Ok(status) = fs::read_to_string(BCE_PATHS.cmd_status_path) {
-        if status.contains("VHCI_CMD_T2_PAUSE")
-            || status.contains("SUSPEND")
-            || status.contains("INACTIVE")
-        {
-            eprintln!("BCE waiting: mailbox status = {}", status.trim());
-            return false;
+    if has_mailbox_interface() {
+        // Check mailbox status
+        if let Ok(status) = fs::read_to_string(BCE_PATHS.cmd_status_path) {
+            if status.contains("VHCI_CMD_T2_PAUSE")
+                || status.contains("SUSPEND")
+                || status.contains("INACTIVE")
+            {
+                eprintln!("BCE waiting: mailbox status = {}", status.trim());
+                return false;
+            }
         }
+
+        // Check PCI link
+        if let Ok(link_status) = fs::read_to_string(BCE_PATHS.pci_link_path) {
+            if !link_status.contains("LINK_ACTIVE") {
+                eprintln!("BCE waiting: PCI link not active");
+                return false;
+            }
+        }
+
+        // Check DMA transfers
+        if let Ok(dma_status) = fs::read_to_string(BCE_PATHS.dma_status_path) {
+            if dma_status.contains("DMA_BUSY") {
+                eprintln!("BCE waiting: DMA active");
+                return false;
+            }
+        }
+
+        return true;
     }
 
-    // Check PCI link
-    if let Ok(link_status) = fs::read_to_string(BCE_PATHS.pci_link_path) {
-        if !link_status.contains("LINK_ACTIVE") {
-            eprintln!("BCE waiting: PCI link not active");
-            return false;
+    if has_vhci_interface() {
+        // Upstream apple-bce-drv path: runtime PM status is the best available health signal.
+        if let Ok(runtime_status) = fs::read_to_string(BCE_VHCI_RUNTIME_STATUS_PATH) {
+            if runtime_status.trim().eq_ignore_ascii_case("suspended") {
+                eprintln!("BCE waiting: bce-vhci runtime is suspended");
+                return false;
+            }
         }
+        return true;
     }
 
-    // Check DMA transfers
-    if let Ok(dma_status) = fs::read_to_string(BCE_PATHS.dma_status_path) {
-        if dma_status.contains("DMA_BUSY") {
-            eprintln!("BCE waiting: DMA active");
-            return false;
-        }
-    }
-
-    true
+    // No BCE interface detected.
+    false
 }
