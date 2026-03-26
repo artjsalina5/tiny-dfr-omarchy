@@ -20,6 +20,7 @@ Expand_OmarchyQuick = [
   { Text = "Notifications",  Action = "Command_OmarchyNotifications",  ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "Next Theme",     Action = "Command_ThemeNext",             ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "Wallpaper",      Action = "Command_WallpaperNext",         ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Touch Bar",      Action = "Command_TouchBarStatus",        ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
 ]
 
 # Settings
@@ -74,4 +75,12 @@ Expand_Screenrecord = [
   { Text = "Region + Audio",  Action = "Command_ScreenrecordRegionAudio",  ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "Display",         Action = "Command_ScreenrecordDisplay",      ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
   { Text = "Display + Audio", Action = "Command_ScreenrecordDisplayAudio", ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+]
+
+# Diagnostics Menu
+Expand_Diagnostics = [
+  { Text = "Touch Bar Status",  Action = "Command_TouchBarStatus",         ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Restart Touch Bar", Action = "Command_TouchBarRestart",        ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "View Logs",         Action = "Command_TouchBarLogs",           ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
+  { Text = "Full Debug",        Action = "Command_TouchBarDebug",          ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196, 0.10588, 0.149019] },
 ]

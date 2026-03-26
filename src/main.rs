@@ -1,3 +1,5 @@
+mod bce_interface;
+
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use cairo::{Antialias, Context, Format, ImageSurface, Surface};
 use chrono::{
@@ -26,6 +28,8 @@ use nix::{
         signal::{SigSet, Signal},
     },
 };
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 use std::{
     cmp::min,
     collections::HashMap,
@@ -35,7 +39,6 @@ use std::{
         unix::{fs::OpenOptionsExt, io::OwnedFd},
     },
     panic::{self, AssertUnwindSafe},
-    path::{Path, PathBuf},
 };
 use udev::MonitorBuilder;
 
@@ -1579,10 +1582,96 @@ fn execute_command(command_id: &str, config: &Config) {
     }
 }
 
+/// Check if Touch Bar hardware is ready using actual device detection
+/// Includes BCE driver coordination for reliable suspend/resume
 fn touchbar_nodes_ready() -> bool {
-    std::path::Path::new("/dev/tiny_dfr_display").exists()
-        && std::path::Path::new("/dev/tiny_dfr_backlight").exists()
-        && std::path::Path::new("/dev/tiny_dfr_display_backlight").exists()
+    let drm = check_touchbar_drm();
+    let backlight = check_touchbar_backlight();
+    let bce = bce_interface::bce_ready_for_resume();
+
+    // Log only when hardware is not ready or unhealthy
+    if !drm || !backlight || !bce {
+        eprintln!(
+            "Touch Bar hardware check: DRM={}, Backlight={}, BCE={}{} state",
+            drm,
+            backlight,
+            bce,
+            if !bce && bce_interface::bce_driver_available() {
+                " (BCE driver not ready for resume)"
+            } else {
+                ""
+            }
+        );
+
+        if !bce {
+            // Log BCE-specific diagnostics
+            log_bce_diagnostics();
+        }
+    }
+
+    // Require DRM + backlight + BCE cooperation (critical for suspend)
+    drm && backlight && bce
+}
+
+/// Log BCE diagnostics for troubleshooting
+fn log_bce_diagnostics() {
+    let paths = &bce_interface::BCE_PATHS;
+
+    eprintln!("  BCE Diagnostics:");
+
+    // Mailbox status
+    if let Ok(status) = std::fs::read_to_string(paths.cmd_status_path) {
+        eprintln!("    Mailbox: {}", status.trim());
+    }
+
+    // DMA status
+    if let Ok(dma) = std::fs::read_to_string(paths.dma_status_path) {
+        eprintln!("    DMA: {}", dma.trim());
+    }
+
+    // PCI link
+    if let Ok(link) = std::fs::read_to_string(paths.pci_link_path) {
+        eprintln!("    PCI Link: {}", link.trim());
+    }
+}
+
+/// Check if Touch Bar DRM device is available
+fn check_touchbar_drm() -> bool {
+    // Method 1: Check by-path symlink (most reliable on T2 Macs)
+    // Touch Bar is on USB-over-PCI via BCE bridge
+    if Path::new("/dev/dri/by-path/pci-0000:04:00.1-usb-0:6:2.1-card").exists() {
+        return true;
+    }
+
+    // Method 2: Check for card0 with Touch Bar driver
+    if let Ok(uevent) = std::fs::read_to_string("/sys/class/drm/card0/device/uevent") {
+        if uevent.contains("DRIVER=appletbdrm") {
+            return true;
+        }
+    }
+
+    // Method 3: Fallback - check if card0 exists
+    // On T2 Macs, Touch Bar is always card0 (iGPU=card1, dGPU=card3)
+    Path::new("/dev/dri/card0").exists()
+}
+
+/// Check if Touch Bar backlight device is available
+fn check_touchbar_backlight() -> bool {
+    Path::new("/sys/class/backlight/appletb_backlight").exists()
+}
+
+/// Detect if running on a T2 Mac
+/// Enhanced with BCE driver verification
+fn is_t2_mac() -> bool {
+    // Check for T2-specific identifiers via DMI
+    if let Ok(dmi_product) = std::fs::read_to_string("/sys/class/dmi/id/product_name") {
+        let product = dmi_product.trim().to_lowercase();
+        if product.contains("macbook") || product.contains("imac") {
+            // T2 macs have BCE driver available
+            return bce_interface::bce_driver_available();
+        }
+    }
+    false
 }
 
 fn build_libinput_pair() -> Result<(Libinput, Libinput)> {
@@ -1650,9 +1739,33 @@ fn try_reinitialize_touchbar_runtime(
     db_width: &mut u32,
     db_height: &mut u32,
 ) -> Result<()> {
+    eprintln!("Beginning Touch Bar resume sequence with BCE coordination...");
+
+    // BCE-aware hardware validation (replaces simple file existence check)
     if !touchbar_nodes_ready() {
         return Err(anyhow!("touchbar device nodes are not ready yet"));
     }
+
+    // BCE SUSPEND/RESUME COORDINATION
+    // Critical: Send resume command to BCE and wait for proper state
+    if bce_interface::bce_is_suspended() {
+        eprintln!("BCE suspended - issuing T2 resume command...");
+        bce_interface::bce_send_resume()?;
+
+        // Wait for DMA transfers to complete and PCI link training
+        eprintln!("Waiting for BCE to become ready (DMA and PCI link)...");
+        bce_interface::bce_wait_ready(Duration::from_secs(10))?;
+
+        // Critical: Wait for PCI Express link re-establishment (post-S3)
+        // Prevents "scheduling while atomic" BUGs and MMIO access before ready
+        eprintln!("Waiting for BCE PCI Express link training...");
+        bce_interface::wait_pci_link_ready(Duration::from_secs(15))?;
+        eprintln!("BCE PCI link trained and ready");
+    } else {
+        eprintln!("BCE not suspended - proceeding with reinitialization");
+    }
+
+    eprintln!("Reinitializing DRM framebuffer and backlight...");
 
     let new_drm = DrmBackend::open_card().context("failed to reopen DRM card")?;
     let (new_height, new_width) = new_drm.mode().size();
@@ -1680,6 +1793,18 @@ fn try_reinitialize_touchbar_runtime(
     *height = new_height;
     *db_width = new_db_width;
     *db_height = new_db_height;
+
+    // Final validation
+    eprintln!(
+        "Touch Bar resume complete: DRM mode {}x{}, FB buffer {}x{}",
+        new_width, new_height, new_db_width, new_db_height
+    );
+
+    // Log BCE status for diagnostics
+    if bce_interface::bce_driver_available() {
+        let bce_status = bce_interface::bce_ready_for_resume();
+        eprintln!("BCE status: ready = {}", bce_status);
+    }
 
     Ok(())
 }

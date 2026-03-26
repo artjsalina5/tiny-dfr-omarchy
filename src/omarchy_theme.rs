@@ -2,6 +2,8 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Arc, LazyLock, Mutex};
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct OmarchyColors {
@@ -59,6 +61,91 @@ impl OmarchyColors {
     pub fn background_rgb(&self) -> Option<(f64, f64, f64)> {
         hex_to_rgb(&self.background)
     }
+
+    pub fn selection_background_rgb(&self) -> Option<(f64, f64, f64)> {
+        hex_to_rgb(&self.selection_background)
+    }
+}
+
+/// Manages Omarchy theme colors with caching to avoid excessive file I/O
+struct OmarchyThemeManager {
+    cached_colors: Option<OmarchyColors>,
+    last_check: Instant,
+    check_interval: Duration,
+    theme_available: bool,
+}
+
+static THEME_MANAGER: LazyLock<Arc<Mutex<OmarchyThemeManager>>> = LazyLock::new(|| {
+    Arc::new(Mutex::new(OmarchyThemeManager {
+        cached_colors: None,
+        last_check: Instant::now() - Duration::from_secs(60),
+        check_interval: Duration::from_secs(5), // Check every 5s for theme changes
+        theme_available: false,
+    }))
+});
+
+impl OmarchyThemeManager {
+    /// Get current Omarchy theme colors with caching
+    /// Returns None if Omarchy is not installed or theme not configured
+    pub fn get_colors() -> Option<OmarchyColors> {
+        let mut mgr = THEME_MANAGER.lock().unwrap();
+
+        // Rate-limit theme file reads to reduce I/O overhead
+        if mgr.last_check.elapsed() < mgr.check_interval {
+            return mgr.cached_colors.clone();
+        }
+
+        mgr.last_check = Instant::now();
+
+        match load_omarchy_theme() {
+            Ok(colors) => {
+                if !mgr.theme_available {
+                    eprintln!("Omarchy theme integration active: using theme colors for Touch Bar");
+                    mgr.theme_available = true;
+                }
+                mgr.cached_colors = Some(colors.clone());
+                Some(colors)
+            }
+            Err(_) => {
+                // Silently fail - Omarchy not installed or theme not set
+                // This is expected on non-Omarchy systems
+                if mgr.theme_available {
+                    eprintln!("Omarchy theme no longer available - falling back to config colors");
+                    mgr.theme_available = false;
+                }
+                mgr.cached_colors = None;
+                None
+            }
+        }
+    }
+
+    /// Invalidate cache to force reload on next access (e.g., after SIGHUP)
+    pub fn invalidate_cache() {
+        let mut mgr = THEME_MANAGER.lock().unwrap();
+        mgr.cached_colors = None;
+        mgr.last_check = Instant::now() - Duration::from_secs(60);
+        eprintln!("Omarchy theme cache invalidated - will reload on next access");
+    }
+
+    /// Check if theme is currently available
+    pub fn is_available() -> bool {
+        THEME_MANAGER.lock().unwrap().theme_available
+    }
+}
+
+/// Public API for accessing Omarchy theme colors
+pub fn get_theme_colors() -> Option<OmarchyColors> {
+    OmarchyThemeManager::get_colors()
+}
+
+/// Public API for invalidating theme cache (called on SIGHUP)
+pub fn invalidate_theme_cache() {
+    OmarchyThemeManager::invalidate_cache();
+}
+
+/// Public API to check if Omarchy theme integration is active
+pub fn is_theme_available() -> bool {
+    OmarchyThemeManager::is_available()
 }
 
 pub fn load_omarchy_theme() -> Result<OmarchyColors> {
