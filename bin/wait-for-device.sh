@@ -35,10 +35,16 @@ check_device() {
             [[ -e /sys/class/backlight/appletb_backlight ]]
             ;;
         touchbar-bce)
-            # BCE mailbox status check for suspend/resume coordination
+            # BCE readiness check for suspend/resume coordination
+            # Supports both tiny-dfr mailbox interface and upstream bce-vhci.
             if [[ -f "/sys/class/bce/vhci/cmd_status" ]]; then
                 local status=$(cat "/sys/class/bce/vhci/cmd_status")
                 [[ "$status" != *"VHCI_CMD_T2_PAUSE"* ]] && [[ "$status" != *"SUSPEND"* ]]
+            elif [[ -f "/sys/class/bce-vhci/bce-vhci/power/runtime_status" ]]; then
+                local runtime_status=$(cat "/sys/class/bce-vhci/bce-vhci/power/runtime_status")
+                [[ "$runtime_status" != "suspended" ]]
+            elif [[ -d "/sys/module/apple_bce" ]] && [[ -e "/dev/bce-vhci" || -d "/sys/class/bce-vhci/bce-vhci" ]]; then
+                true
             else
                 false
             fi
