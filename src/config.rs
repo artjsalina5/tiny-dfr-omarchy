@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::fonts::{FontConfig, Pattern};
 use crate::FunctionLayer;
 use anyhow::Error;
