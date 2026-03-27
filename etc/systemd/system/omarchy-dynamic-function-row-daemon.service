@@ -1,49 +1,33 @@
 [Unit]
-Description=Omarchy Dynamic Function Row Daemon
+Description=omarchy-dynamic-function-row-daemon - Legacy alias for tiny-dfr-omarchy
 After=systemd-user-sessions.service systemd-logind.service
+Conflicts=tiny-dfr-omarchy.service tiny-dfr.service
 
 [Service]
+Type=simple
 User=root
-ExecStart=/usr/bin/omarchy-dynamic-function-row-daemon
+
+# Wait for device readiness before daemon startup
+ExecStartPre=-/usr/bin/udevadm settle -t 4
+ExecStartPre=-/usr/bin/wait-for-device.sh touchbar-minimal 4
+ExecStartPre=-/usr/bin/wait-for-device.sh hid-kbd 4
+
+ExecStart=/usr/bin/tiny-dfr-omarchy
 Restart=always
+RestartSec=1
 
-# === CRITICAL: Disable security features that block login shell execution ===
-
-# Allow access to user home directories (needed for shell config files)
+# Security settings for hardware daemon
 ProtectHome=false
-
-# Don't isolate user namespace (su needs access to real user database)
-PrivateUsers=false
-
-# Allow SUID execution (needed for su command)
-RestrictSUIDSGID=false
-
-# Allow access to user information and session data
 ProtectSystem=false
-
-# === ENABLE: Features that support user session integration ===
-
-# Add supplementary groups for user access
-SupplementaryGroups=users
-
-# Preserve important session environment variables
-Environment="XDG_RUNTIME_DIR=/run/user"
-
-# Allow access to user session directories
-PrivateTmp=false
-
-# === SECURITY: Keep essential protections that don't interfere ===
-
-# Protect kernel features we don't need (but allow backlight access)
-# ProtectKernelTunables=true  # Disabled - daemon needs to write to /sys/class/backlight
 ProtectKernelModules=true
 ProtectControlGroups=true
-
-# Restrict network access (daemon doesn't need network)
+PrivateUsers=false
 PrivateNetwork=true
-
-# Restrict capabilities to only what's needed
+PrivateTmp=false
+RestrictSUIDSGID=false
+SupplementaryGroups=users
 CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE CAP_FOWNER
+Environment="XDG_RUNTIME_DIR=/run/user"
 
 [Install]
 WantedBy=multi-user.target

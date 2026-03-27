@@ -856,9 +856,11 @@ impl FunctionLayer {
         let theme_colors = omarchy_theme::get_theme_colors();
         let theme_active = theme_colors.as_ref().and_then(|colors| colors.accent_rgb());
         let theme_inactive = theme_colors.as_ref().and_then(|colors| {
-            colors
-                .selection_background_rgb()
-                .or_else(|| colors.accent_rgb().map(|(r, g, b)| (r * 0.45, g * 0.45, b * 0.45)))
+            colors.selection_background_rgb().or_else(|| {
+                colors
+                    .accent_rgb()
+                    .map(|(r, g, b)| (r * 0.45, g * 0.45, b * 0.45))
+            })
         });
 
         for i in 0..self.buttons.len() {
@@ -1771,19 +1773,34 @@ fn try_reinitialize_touchbar_runtime(
     // Critical: Send resume command to BCE and wait for proper state
     if bce_interface::bce_is_suspended() {
         eprintln!("BCE suspended - issuing T2 resume command...");
-        bce_interface::bce_send_resume()?;
+        if let Err(e) = bce_interface::bce_send_resume() {
+            eprintln!("Warning: BCE resume command failed: {e:#}");
+        }
 
         // Wait for DMA transfers to complete and PCI link training
         eprintln!("Waiting for BCE to become ready (DMA and PCI link)...");
-        bce_interface::bce_wait_ready(Duration::from_secs(10))?;
+        if let Err(e) = bce_interface::bce_wait_ready(Duration::from_secs(3)) {
+            eprintln!("Warning: BCE readiness check timed out: {e:#}");
+        }
 
         // Critical: Wait for PCI Express link re-establishment (post-S3)
         // Prevents "scheduling while atomic" BUGs and MMIO access before ready
         eprintln!("Waiting for BCE PCI Express link training...");
-        bce_interface::wait_pci_link_ready(Duration::from_secs(15))?;
-        eprintln!("BCE PCI link trained and ready");
+        if let Err(e) = bce_interface::wait_pci_link_ready(Duration::from_secs(4)) {
+            eprintln!("Warning: BCE PCI link readiness check timed out: {e:#}");
+        } else {
+            eprintln!("BCE PCI link trained and ready");
+        }
     } else {
         eprintln!("BCE not suspended - proceeding with reinitialization");
+    }
+
+    if bce_interface::bce_driver_available() {
+        if let Err(e) = bce_interface::bce_send_touchbar_reset() {
+            eprintln!("Warning: BCE Touch Bar reset failed: {e:#}");
+        } else {
+            eprintln!("Issued BCE Touch Bar reset during resume reinit");
+        }
     }
 
     eprintln!("Reinitializing DRM framebuffer and backlight...");
@@ -1814,6 +1831,13 @@ fn try_reinitialize_touchbar_runtime(
     *height = new_height;
     *db_width = new_db_width;
     *db_height = new_db_height;
+
+    if let Err(e) = input_tb.dispatch() {
+        eprintln!("Warning: input_tb.dispatch after resume failed: {e}");
+    }
+    if let Err(e) = input_main.dispatch() {
+        eprintln!("Warning: input_main.dispatch after resume failed: {e}");
+    }
 
     // Final validation
     eprintln!(
@@ -2039,6 +2063,8 @@ fn real_main(drm: &mut DrmBackend) {
     let mut touches: HashMap<u32, (usize, usize)> = HashMap::new();
     let mut pending_actions: Vec<PendingAction> = Vec::new();
     let mut touchbar_runtime_invalidated = false;
+    let mut digitizer_recovery_deadline: Option<std::time::Instant> = None;
+    let mut digitizer_recovery_attempted = false;
     loop {
         if RELOAD_OMARCHY_THEME.swap(false, Ordering::Relaxed) {
             omarchy_theme::invalidate_theme_cache();
@@ -2126,6 +2152,8 @@ fn real_main(drm: &mut DrmBackend) {
                     &mut layers,
                 );
             }
+            digitizer_recovery_deadline = None;
+            digitizer_recovery_attempted = false;
             touchbar_runtime_invalidated = true;
             next_timeout_ms = min(next_timeout_ms, 150);
         } else if touchbar_runtime_invalidated {
@@ -2155,6 +2183,10 @@ fn real_main(drm: &mut DrmBackend) {
                             Err(e) => eprintln!("Hyprland not yet available: {}", e),
                         }
 
+                        digitizer_recovery_deadline = Some(
+                            std::time::Instant::now() + std::time::Duration::from_millis(1200),
+                        );
+                        digitizer_recovery_attempted = false;
                         touchbar_runtime_invalidated = false;
                         needs_complete_redraw = true;
                         continue;
@@ -2163,6 +2195,37 @@ fn real_main(drm: &mut DrmBackend) {
                         eprintln!("Touch Bar reinit failed: {e:#}");
                         next_timeout_ms = min(next_timeout_ms, 500);
                     }
+                }
+            }
+        }
+
+        if !touchbar_runtime_invalidated {
+            if digitizer.is_none() && digitizer_recovery_deadline.is_none() {
+                digitizer_recovery_deadline =
+                    Some(std::time::Instant::now() + std::time::Duration::from_millis(1200));
+                digitizer_recovery_attempted = false;
+            }
+
+            if let Some(deadline) = digitizer_recovery_deadline {
+                if digitizer.is_some() {
+                    digitizer_recovery_deadline = None;
+                    digitizer_recovery_attempted = false;
+                } else if !digitizer_recovery_attempted && std::time::Instant::now() >= deadline {
+                    eprintln!(
+                        "Digitizer missing after resume; forcing BCE Touch Bar reset and runtime reinit"
+                    );
+                    if let Err(e) = bce_interface::bce_send_touchbar_reset() {
+                        eprintln!("Warning: recovery Touch Bar reset failed: {e:#}");
+                    }
+                    digitizer_recovery_attempted = true;
+                    touchbar_runtime_invalidated = true;
+                    invalidate_touchbar_runtime(
+                        &mut digitizer,
+                        &mut touches,
+                        &mut pending_actions,
+                        &mut layers,
+                    );
+                    next_timeout_ms = min(next_timeout_ms, 150);
                 }
             }
         }
@@ -2510,6 +2573,8 @@ fn real_main(drm: &mut DrmBackend) {
                     let dev = evt.device();
                     if is_touchbar_device(&dev) {
                         digitizer = Some(dev);
+                        digitizer_recovery_deadline = None;
+                        digitizer_recovery_attempted = false;
                     }
                 }
                 Event::Device(DeviceEvent::Removed(evt)) => {
@@ -2537,10 +2602,6 @@ fn real_main(drm: &mut DrmBackend) {
                     }
                 }
                 Event::Touch(te) => {
-                    if backlight.current_bl() == 0 {
-                        continue;
-                    }
-
                     if !is_touchbar_device(&te.device()) {
                         continue;
                     }
@@ -2550,11 +2611,7 @@ fn real_main(drm: &mut DrmBackend) {
                         digitizer = Some(te.device());
                     }
 
-                    if !digitizer
-                        .as_ref()
-                        .map(is_touchbar_device)
-                        .unwrap_or(false)
-                    {
+                    if !digitizer.as_ref().map(is_touchbar_device).unwrap_or(false) {
                         continue;
                     }
                     match te {

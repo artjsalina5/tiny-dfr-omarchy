@@ -1,7 +1,7 @@
 [Unit]
-Description=tiny-dfr - Legacy alias for tiny-dfr-omarchy
+Description=tiny-dfr-omarchy - Apple Touch Bar daemon
 After=systemd-user-sessions.service systemd-logind.service
-Conflicts=tiny-dfr-omarchy.service omarchy-dynamic-function-row-daemon.service
+Conflicts=tiny-dfr.service omarchy-dynamic-function-row-daemon.service
 
 [Service]
 Type=simple

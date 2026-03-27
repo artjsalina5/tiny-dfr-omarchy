@@ -45,7 +45,7 @@ PrimaryLayerKeys = [
 
 # Media layer
 MediaLayerKeys = [
-  { Icon = "omarchy", Action = "Expand_Omarchy", ShowButtonOutlines = false, ButtonOutlinesColor = 0.0, Stretch = 1 },
+  { Icon = "omarchy", Action = "Expand_OmarchyQuick", ShowButtonOutlines = false, ButtonOutlinesColor = 0.0, Stretch = 1 },
   { Icon = "screenshot", Action = "Command_CaptureControls", ShowButtonOutlines = false, ButtonOutlinesColor = 0.0, Stretch = 1 },
   { Time = "%I:%M%P %-e/%m", Action = "Time", Stretch = 2, ShowButtonOutlines = false, ButtonOutlinesColor = [0.2,0.2,0.2] },
   { Text = "plugin-hyprland", Action = "Hyprland_Expand_ActiveWindow", ButtonTitle = "title", ShowAppIconAlongsideText = true, ShowButtonOutlines = false, ButtonOutlinesColor = [0.10196,0.10588,0.149019], Stretch = 4 },

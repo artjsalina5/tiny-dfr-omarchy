@@ -1,14 +1,13 @@
 [package]
 name = "tiny-dfr"
-version = "0.5.0-omarchy"
-edition = "2021"
+version = "0.6.5-omarchy"
+edition = "2024"
 license = "MIT AND Apache-2.0"
 description = "Dynamic function row daemon for Apple MacBook Touch Bar - Omarchy fork with enhanced configuration and suspend/resume support"
-homepage = "https://github.com/artjsalina5/tiny-dfr"
-repository = "https://github.com/artjsalina5/tiny-dfr"
+homepage = "https://github.com/artjsalina5/tiny-dfr-omarchy"
+repository = "https://github.com/artjsalina5/tiny-dfr-omarchy"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 cairo-rs = { version = "0.20", default-features = false, features = [
   "freetype",

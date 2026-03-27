@@ -94,14 +94,26 @@ pub fn bce_send_resume() -> Result<()> {
         return Ok(());
     }
 
-    Err(anyhow!("BCE resume command unavailable: no supported interface found"))
+    Err(anyhow!(
+        "BCE resume command unavailable: no supported interface found"
+    ))
 }
 
 /// Send Touch Bar reset command
-#[allow(dead_code)]
 pub fn bce_send_touchbar_reset() -> Result<()> {
-    fs::write(BCE_PATHS.cmd_path, "VHCI_CMD_RESET_TOUCHBAR")
-        .context("BCE Touch Bar reset command failed")
+    if has_mailbox_interface() {
+        return fs::write(BCE_PATHS.cmd_path, "VHCI_CMD_RESET_TOUCHBAR")
+            .context("BCE Touch Bar reset command failed");
+    }
+
+    if has_vhci_interface() {
+        // Upstream apple-bce-drv does not expose an equivalent user-space reset command.
+        return Ok(());
+    }
+
+    Err(anyhow!(
+        "BCE Touch Bar reset unavailable: no supported interface found"
+    ))
 }
 
 /// Wait for BCE to become ready (with DMA barriers)

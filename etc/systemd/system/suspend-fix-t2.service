@@ -1,37 +1,25 @@
 [Unit]
-Description=Disable and Re-Enable Apple BCE Module + WiFi + KB Backlight
+Description=suspend-fix-t2 - Apple BCE suspend/resume coordinator
 Before=sleep.target
 StopWhenUnneeded=yes
 
 [Service]
-User=root
 Type=oneshot
+User=root
 RemainAfterExit=yes
 
-# Save keyboard backlight and turn it off during suspend.
+# Suspend sequence: save backlight, stop daemons, unload Touch Bar modules, power down BCE
 ExecStart=-/usr/bin/tiny-dfr-kbd-backlight save-off
-
-#touchbar and dependencies
+ExecStart=-/usr/bin/systemctl stop tiny-dfr-omarchy.service
 ExecStart=-/usr/bin/systemctl stop omarchy-dynamic-function-row-daemon.service
 ExecStart=-/usr/bin/modprobe -r appletbdrm
 ExecStart=-/usr/bin/modprobe -r hid_appletb_bl
 ExecStart=-/usr/bin/modprobe -r hid_appletb_kbd
-
-# WiFi reload is intentionally disabled for faster wake.
-# Re-enable these lines only if your WiFi fails after resume.
-# ExecStart=-/usr/bin/modprobe -r brcmfmac_wcc
-# ExecStart=-/usr/bin/modprobe -r brcmfmac
-
 ExecStart=-/usr/bin/rmmod -f apple-bce
 
+# Resume sequence: reinitialize BCE, reload Touch Bar modules, restore services
+# (WiFi reload disabled for faster wake - uncomment brcmfmac if needed)
 ExecStop=-/usr/bin/modprobe apple-bce
-
-# WiFi reload is intentionally disabled for faster wake.
-# Re-enable these lines only if your WiFi fails after resume.
-# ExecStop=-/usr/bin/modprobe brcmfmac
-# ExecStop=-/usr/bin/modprobe brcmfmac_wcc
-
-#touchbar and dependencies - BCE-aware resume sequence
 ExecStop=-/usr/bin/wait-for-device.sh touchbar-bce 3
 ExecStop=-/usr/bin/modprobe hid_appletb_bl
 ExecStop=-/usr/bin/wait-for-device.sh hid-backlight 4
@@ -40,8 +28,11 @@ ExecStop=-/usr/bin/wait-for-device.sh hid-kbd 4
 ExecStop=-/usr/bin/tiny-dfr-kbd-backlight restore
 ExecStop=-/usr/bin/modprobe appletbdrm
 ExecStop=-/usr/bin/wait-for-device.sh touchbar-minimal 4
-ExecStopPost=-/usr/bin/systemctl reset-failed omarchy-dynamic-function-row-daemon.service
-ExecStopPost=-/usr/bin/systemctl restart omarchy-dynamic-function-row-daemon.service
+
+# Let udev finish device registration before daemon rebinds
+ExecStopPost=-/usr/bin/udevadm settle -t 3
+ExecStopPost=-/usr/bin/systemctl reset-failed tiny-dfr-omarchy.service
+ExecStopPost=-/usr/bin/systemctl restart tiny-dfr-omarchy.service
 
 [Install]
 WantedBy=sleep.target

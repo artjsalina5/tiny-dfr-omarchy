@@ -5,10 +5,12 @@
 set -e
 
 SKIP_DEPS=false
-DAEMON_BIN="omarchy-dynamic-function-row-daemon"
+DAEMON_BIN="tiny-dfr-omarchy"
 LEGACY_BIN="tiny-dfr"
 DAEMON_SERVICE="${DAEMON_BIN}.service"
 LEGACY_SERVICE="tiny-dfr.service"
+LEGACY_OMARCHY_SERVICE="omarchy-dynamic-function-row-daemon.service"
+LEGACY_OMARCHY_BIN="omarchy-dynamic-function-row-daemon"
 
 install_arch_deps() {
     local user_home="$1"
@@ -45,7 +47,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-echo "Installing Omarchy Dynamic Function Row Daemon for T2 MacBook..."
+echo "Installing tiny-dfr-omarchy for T2 MacBook..."
 
 # Check if running on T2 Mac
 if ! grep -q "MacBookPro16,1\|MacBookAir" /sys/class/dmi/id/product_name 2>/dev/null; then
@@ -95,13 +97,16 @@ echo "Installing ${DAEMON_BIN}..."
 # Stop service if running to avoid "Text file busy" error
 sudo systemctl stop "$DAEMON_SERVICE" 2>/dev/null || true
 sudo systemctl stop "$LEGACY_SERVICE" 2>/dev/null || true
+sudo systemctl stop "$LEGACY_OMARCHY_SERVICE" 2>/dev/null || true
 sudo install -Dm755 target/release/tiny-dfr "/usr/bin/${DAEMON_BIN}"
 sudo ln -sf "/usr/bin/${DAEMON_BIN}" "/usr/bin/${LEGACY_BIN}"
+sudo ln -sf "/usr/bin/${DAEMON_BIN}" "/usr/bin/${LEGACY_OMARCHY_BIN}"
 sudo mkdir -p /usr/share/tiny-dfr
 sudo cp share/tiny-dfr/* /usr/share/tiny-dfr/
 sudo cp etc/systemd/system/suspend-fix-t2.service /etc/systemd/system/
-sudo install -Dm644 etc/systemd/system/omarchy-dynamic-function-row-daemon.service "/etc/systemd/system/${DAEMON_SERVICE}"
+sudo install -Dm644 etc/systemd/system/tiny-dfr-omarchy.service "/etc/systemd/system/${DAEMON_SERVICE}"
 sudo ln -sf "/etc/systemd/system/${DAEMON_SERVICE}" "/etc/systemd/system/${LEGACY_SERVICE}"
+sudo ln -sf "/etc/systemd/system/${DAEMON_SERVICE}" "/etc/systemd/system/${LEGACY_OMARCHY_SERVICE}"
 sudo install -Dm755 bin/tiny-dfr-terminal-exec /usr/bin/tiny-dfr-terminal-exec
 sudo install -Dm755 bin/wait-for-device.sh /usr/bin/wait-for-device.sh
 sudo install -Dm755 bin/tiny-dfr-kbd-backlight /usr/bin/tiny-dfr-kbd-backlight
@@ -117,6 +122,11 @@ sudo udevadm trigger
 
 # Setup systemd service
 sudo systemctl daemon-reload
+
+# Enforce a single daemon unit to avoid multiple instances contending for Touch Bar input.
+sudo systemctl disable --now "$LEGACY_SERVICE" 2>/dev/null || true
+sudo systemctl disable --now "$LEGACY_OMARCHY_SERVICE" 2>/dev/null || true
+sudo systemctl reset-failed "$LEGACY_SERVICE" "$LEGACY_OMARCHY_SERVICE" 2>/dev/null || true
 
 # Avoid duplicate suspend handlers on Omarchy installs.
 if systemctl list-unit-files t2-suspend.service >/dev/null 2>&1; then

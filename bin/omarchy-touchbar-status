@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-SERVICE_NAME="omarchy-dynamic-function-row-daemon.service"
+SERVICE_NAME="tiny-dfr-omarchy.service"
 
-echo "=== omarchy-dynamic-function-row-daemon Touch Bar Status ==="
+echo "=== tiny-dfr-omarchy Touch Bar Status ==="
 
 echo "Service:"
 if systemctl is-active --quiet "$SERVICE_NAME"; then
