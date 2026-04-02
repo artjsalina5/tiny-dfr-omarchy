@@ -18,7 +18,7 @@ Touch Bar daemon for Apple T2 and Silicon Macs. Omarchy-flavored fork of [tiny-d
 ## Installation
 ### AUR Package
 
->[!Note}
+>[!Note]
 >Not implemented yet due to superuser requirements. If anyone wants to assist in making this become a reality, I will merge pull requests in support of this.
 
 ### Manual Installation
