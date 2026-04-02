@@ -16,21 +16,10 @@ Touch Bar daemon for Apple T2 and Silicon Macs. Omarchy-flavored fork of [tiny-d
 - Easy configuration with hot-reload support
 
 ## Installation
+### AUR Package
 
-### From AUR (Recommended)
-
-```bash
-yay -S tiny-dfr-omarchy
-# or
-paru -S tiny-dfr-omarchy
-```
-
-After installation:
-
-```bash
-sudo systemctl enable --now tiny-dfr-omarchy.service
-sudo systemctl enable --now suspend-fix-t2.service
-```
+>[!Note}
+>Not implemented yet due to superuser requirements. If anyone wants to assist in making this become a reality, I will merge pull requests in support of this.
 
 ### Manual Installation
 
@@ -55,9 +44,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 
 ### Hardware
 - Apple MacBook with Touch Bar (T2 or Apple Silicon)
-- Tested on MacBook Pro 16,1 (2019) and similar models
+- Tested on MacBook Pro 16,1 (2019) with Omarchy 3.5.0
 
 ### Kernel Modules
+
 Required kernel modules (usually auto-loaded):
 - `apple-bce` - Bridge Co-processor Engine driver
 - `hid-appletb-kbd` - Touch Bar keyboard driver
@@ -66,12 +56,12 @@ Required kernel modules (usually auto-loaded):
 
 ### Kernel Parameters
 Add these to your bootloader configuration for reliable suspend/resume:
+>[!Note]
+> `mce=off` is added to get rid of the annoying hardware error messages that occur when booting the t2linux kernel. These are not indicative of real hardware errors, but problems with the t2linux kernel drivers that do not affect the computer. Setting `mce=nobootlog` would probably work the same, but I have not verified that. Welcome to pull requests if someone wants to test that for me.
 
 ```
 intel_iommu=on iommu=pt pcie_ports=compat mem_sleep_default=deep pcie_aspm=off mce=off
 ```
-
-**Note**: Do not include user-specific parameters like `cryptdevice` or `root=` from examples.
 
 ## Suspend/Resume System
 
@@ -327,13 +317,11 @@ Based on [tiny-dfr](https://github.com/AsahiLinux/tiny-dfr) by the Asahi Linux p
 
 ## License
 
-Dual-licensed under MIT and Apache 2.0.
+Licensed under MIT
 
 - MIT License - See [LICENSE-MIT](LICENSE-MIT)
-- Apache License 2.0 - See [LICENSE-APACHE](LICENSE-APACHE)
 
 Original work Copyright (c) 2023 WhatAmISupposedToPutHere  
-Omarchy fork Copyright (c) 2024-2026 Arturo Salinas
 
 ## Changelog
 
